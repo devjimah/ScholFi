@@ -1,249 +1,403 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useAccount, useDisconnect } from 'wagmi';
-import { ConnectButton } from '@rainbow-me/rainbowkit';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Card, CardContent } from "@/components/ui/card";
-import { Loader2, Plus, Search, Filter, Wallet } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
-import BetCard from '../components/betting/BetCard';
-import PollCard from '../components/betting/PollCard';
-import RaffleCard from '../components/betting/RaffleCard';
-import { notify } from '../components/ui/NotificationSystem';
-import { useMockContract } from '../components/hooks/useMockContract';
+import { useAccount } from 'wagmi';
+import { useContract } from '@/hooks/useContract';
+import { notify } from '@/app/components/ui/NotificationSystem';
+import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { 
+  Plus, 
+  RefreshCw, 
+  Loader2,
+  Coins,
+  Vote,
+  Ticket,
+  Wallet
+} from 'lucide-react';
+import CustomConnectButton from '@/app/components/ui/CustomConnectButton';
+import BetHistory from '@/app/components/bets/BetHistory';
+import PollCard from '@/app/components/polls/PollCard';
+import StakeCard from '@/app/components/stake/StakeCard';
+import CreateBetModal from '@/app/components/modals/CreateBetModal';
+import CreateRaffleModal from '@/app/components/modals/CreateRaffleModal';
+import CreatePollModal from '@/app/components/modals/CreatePollModal';
+import CreateStakeModal from '@/app/components/modals/CreateStakeModal';
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
+import { formatEther } from 'viem';
+import BetStats from '../components/stats/BetStats';
+import BetCard from '../components/bet/BetCard';
 
 export default function BetsPage() {
   const router = useRouter();
   const { address, isConnected } = useAccount();
-  const { disconnect } = useDisconnect();
-  const [activeTab, setActiveTab] = useState('all');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [isLoading, setIsLoading] = useState(true);
+  const [showCreateBetModal, setShowCreateBetModal] = useState(false);
+  const [showCreatePollModal, setShowCreatePollModal] = useState(false);
+  const [showCreateRaffleModal, setShowCreateRaffleModal] = useState(false);
+  const [showCreateStakeModal, setShowCreateStakeModal] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [showBetHistory, setShowBetHistory] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
-  const contract = useMockContract();
-  console.log('Current contract items:', contract.items);
+  const { 
+    bets,
+    polls,
+    raffles, 
+    stakes,
+    loading: isLoading, 
+    error,
+    acceptBet,
+    buyTicket,
+    createBet,
+    createPoll,
+    createRaffle,
+    createStake,
+    stake,
+    vote,
+    fetchBets,
+    fetchPolls,
+    fetchRaffles,
+    fetchStakes
+  } = useContract();
+
+  // Handle client-side mounting
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
-    // Redirect to home if not connected
-    if (!isConnected) {
-      router.replace('/');
-      return;
+    if (!isConnected && mounted) {
+      router.push('/');
     }
+  }, [isConnected, router, mounted]);
 
-    const fetchItems = async () => {
-      try {
-        setIsLoading(true);
-        await contract.getAllItems();
-      } catch (error) {
-        console.error('Error fetching items:', error);
-        notify('error', 'Failed to fetch items');
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchItems();
-  }, [isConnected, router, contract]);
-
-  const handleDisconnect = async () => {
-    try {
-      await disconnect();
-      notify('success', 'Wallet disconnected');
-      router.replace('/');
-    } catch (error) {
-      console.error('Error disconnecting:', error);
-      notify('error', 'Failed to disconnect wallet');
-    }
-  };
-
-  const handleAcceptBet = async (betId, amount) => {
-    try {
-      await contract.acceptBet(betId, amount);
-      notify('success', 'Bet accepted successfully!');
-    } catch (error) {
-      console.error('Error accepting bet:', error);
-      notify('error', 'Failed to accept bet');
-    }
-  };
-
-  const handleVotePoll = async (pollId, optionIndex) => {
-    try {
-      await contract.votePoll(pollId, optionIndex);
-      notify('success', 'Vote recorded successfully!');
-    } catch (error) {
-      console.error('Error voting in poll:', error);
-      notify('error', 'Failed to vote in poll');
-    }
-  };
-
-  const handleBuyRaffleTickets = async (raffleId, amount) => {
-    try {
-      await contract.buyRaffleTickets(raffleId, amount);
-      notify('success', `Successfully purchased ${amount} ticket(s)!`);
-    } catch (error) {
-      console.error('Error buying raffle tickets:', error);
-      notify('error', 'Failed to buy raffle tickets');
-    }
-  };
-
-  const renderItem = (item) => {
-    console.log('Rendering item:', item);
-    switch (item.type) {
-      case 'bet':
-        return (
-          <BetCard 
-            key={item.id} 
-            bet={item} 
-            onAccept={handleAcceptBet}
-          />
-        );
-      case 'poll':
-        return (
-          <PollCard 
-            key={item.id} 
-            poll={item} 
-            onVote={handleVotePoll}
-          />
-        );
-      case 'raffle':
-        return (
-          <RaffleCard 
-            key={item.id} 
-            raffle={item} 
-            onBuyTickets={handleBuyRaffleTickets}
-          />
-        );
-      default:
-        console.log('Unknown item type:', item.type);
-        return null;
-    }
-  };
-
-  const filteredItems = contract.items.filter(item => {
-    const matchesSearch = item.description.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesStatus = statusFilter === 'all' || item.status === statusFilter;
-    const matchesType = activeTab === 'all' || item.type === activeTab;
-    return matchesSearch && matchesStatus && matchesType;
-  });
-
-  console.log('Filtered items:', filteredItems);
-
-  // Show nothing while checking connection status
-  if (!isConnected) {
-    return null;
+  // Early return while loading or not mounted
+  if (!mounted || isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="w-8 h-8 animate-spin" />
+      </div>
+    );
   }
 
-  return (
-    <main className="container mx-auto px-4 py-8 max-w-7xl">
-      <div className="flex flex-col gap-8">
-        {/* Header Section */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div>
-            <h1 className="text-4xl font-bold bg-gradient-to-r from-primary via-purple-500 to-pink-500 text-transparent bg-clip-text">
-              Betting Platform
-            </h1>
-            <p className="text-muted-foreground mt-2">
-              Create, join, and track various betting activities
-            </p>
-          </div>
-
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <Card className="bg-background/50">
-                <CardContent className="py-2 px-4 flex items-center gap-2">
-                  <Wallet className="h-4 w-4" />
-                  <span className="text-sm font-medium">
-                    {address?.slice(0, 6)}...{address?.slice(-4)}
-                  </span>
-                </CardContent>
-              </Card>
-              <Button
-                variant="outline"
-                onClick={handleDisconnect}
-                className="border-red-500 text-red-500 hover:bg-red-500 hover:text-white"
-              >
-                Disconnect
-              </Button>
-            </div>
-
-            <Link href="/create">
-              <Button className="gap-2">
-                <Plus className="h-4 w-4" />
-                Create New
-              </Button>
-            </Link>
-          </div>
-        </div>
-
-        {/* Filters Section */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search items..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10"
-            />
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Filter className="h-4 w-4 text-muted-foreground" />
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger>
-                <SelectValue placeholder="Filter by status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="open">Open</SelectItem>
-                <SelectItem value="closed">Closed</SelectItem>
-                <SelectItem value="resolved">Resolved</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-
-        {/* Tabs and Content */}
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid grid-cols-4 max-w-[400px]">
-            <TabsTrigger value="all">All</TabsTrigger>
-            <TabsTrigger value="bet">Bets</TabsTrigger>
-            <TabsTrigger value="poll">Polls</TabsTrigger>
-            <TabsTrigger value="raffle">Raffles</TabsTrigger>
-          </TabsList>
-
-          <div className="mt-6">
-            {isLoading ? (
-              <div className="flex justify-center items-center min-h-[200px]">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              </div>
-            ) : filteredItems.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {filteredItems.map(item => renderItem(item))}
-              </div>
-            ) : (
-              <div className="text-center py-12">
-                <h3 className="text-lg font-semibold">No items found</h3>
-                <p className="text-muted-foreground mt-2">
-                  Try adjusting your filters or create a new item
-                </p>
-                <Link href="/create">
-                  <Button className="mt-4">
-                    Create New Item
-                  </Button>
-                </Link>
-              </div>
-            )}
-          </div>
-        </Tabs>
+  // Handle error state
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen">
+        <div className="text-red-500 mb-4">Error: {error}</div>
+        <Button onClick={handleRefresh}>
+          <RefreshCw className="w-4 h-4 mr-2" />
+          Retry
+        </Button>
       </div>
-    </main>
+    );
+  }
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      await Promise.all([fetchBets(), fetchPolls(), fetchRaffles(), fetchStakes()]);
+      notify('success', 'Data refreshed successfully');
+    } catch (error) {
+      notify('error', 'Failed to refresh data');
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  const handleDisconnect = () => {
+    router.push('/');
+  };
+
+  const handleCreateBet = async (data) => {
+    try {
+      await createBet(data);
+      notify('success', 'Bet created successfully');
+    } catch (error) {
+      notify('error', 'Failed to create bet');
+    }
+  };
+
+  const handleCreatePoll = async (data) => {
+    try {
+      await createPoll(data);
+      notify('success', 'Poll created successfully');
+    } catch (error) {
+      notify('error', 'Failed to create poll');
+    }
+  };
+
+  const handleCreateRaffle = async (data) => {
+    try {
+      await createRaffle(data);
+      notify('success', 'Raffle created successfully');
+    } catch (error) {
+      notify('error', 'Failed to create raffle');
+    }
+  };
+
+  const handleCreateStake = async (data) => {
+    try {
+      await createStake(data);
+      notify('success', 'Stake created successfully');
+    } catch (error) {
+      notify('error', 'Failed to create stake');
+    }
+  };
+
+  const handleVote = async (pollId, optionIndex) => {
+    try {
+      await vote(pollId, optionIndex);
+      notify('success', 'Vote recorded successfully');
+    } catch (error) {
+      notify('error', error.message || 'Failed to vote');
+    }
+  };
+
+  const handleStake = async (stakeId, amount) => {
+    try {
+      await stake(stakeId, amount);
+      notify('success', 'Successfully staked ETH');
+    } catch (error) {
+      notify('error', error.message || 'Failed to stake ETH');
+    }
+  };
+
+  const calculateStats = () => {
+    if (!bets || !address) return null;
+
+    const userBets = bets.filter(bet => bet.creator === address || bet.challenger === address);
+    const wonBets = userBets.filter(bet => bet.winner === address);
+    const totalVolume = userBets.reduce((acc, bet) => acc + parseFloat(formatEther(bet.amount)), 0);
+    const netProfit = wonBets.reduce((acc, bet) => acc + parseFloat(formatEther(bet.amount)), 0);
+
+    return {
+      totalBets: userBets.length,
+      winRate: userBets.length ? (wonBets.length / userBets.length) * 100 : 0,
+      totalVolume,
+      netProfit
+    };
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-background via-background/90 to-background/80">
+      <div className="container mx-auto px-4 py-8">
+        <div className="flex justify-between items-center mb-8">
+          <h1 className="text-3xl uppercase font-bold">Your Dashboard</h1>
+          <div className="flex items-center gap-4">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+            >
+              {isRefreshing ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )}
+              <span className="ml-2">Refresh</span>
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button 
+                  size="sm"
+                  className="bg-gradient-to-r from-primary via-purple-500 to-pink-500"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Create Event
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onSelect={() => setShowCreateBetModal(true)}>
+                  <Coins className="h-4 w-4 mr-2" />
+                  Create Bet
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => setShowCreatePollModal(true)}>
+                  <Vote className="h-4 w-4 mr-2" />
+                  Create Poll
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => setShowCreateRaffleModal(true)}>
+                  <Ticket className="h-4 w-4 mr-2" />
+                  Create Raffle
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => setShowCreateStakeModal(true)}>
+                  <Coins className="h-4 w-4 mr-2" />
+                  Create Stake
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <div className="flex items-center gap-2">
+              <CustomConnectButton />
+              {isConnected && (
+                <Button variant="outline" size="sm" onClick={handleDisconnect} className="gap-2">
+                  <Wallet className="h-4 w-4" />
+                  Disconnect
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Stats Section */}
+        <div className="mb-8">
+          <BetStats stats={calculateStats()} />
+        </div>
+
+        <div className="space-y-8">
+          <Tabs defaultValue="bets" className="w-full">
+            <TabsList>
+              <TabsTrigger value="bets">Bets</TabsTrigger>
+              <TabsTrigger value="polls">Polls</TabsTrigger>
+              <TabsTrigger value="raffles">Raffles</TabsTrigger>
+              <TabsTrigger value="staking">Staking</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="bets">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-semibold">Active Bets</h2>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowBetHistory(!showBetHistory)}
+                >
+                  {showBetHistory ? 'Show Active Bets' : 'Show Bet History'}
+                </Button>
+              </div>
+
+              {showBetHistory ? (
+                <BetHistory bets={bets} userAddress={address} />
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                  {bets.filter(bet => !bet.resolved).map((bet) => (
+                    <div key={bet.id} className="group relative p-0.5 rounded-lg bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500">
+                      <div className="relative rounded-lg bg-background p-1">
+                        <Card className="w-full border-0">
+                          <CardContent className="p-4">
+                            <BetCard bet={bet} onAccept={acceptBet} userAddress={address} />
+                          </CardContent>
+                        </Card>
+                      </div>
+                    </div>
+                  ))}
+                  {bets.filter(bet => !bet.resolved).length === 0 && (
+                    <div className="col-span-full text-center py-8 text-muted-foreground">
+                      No active bets available
+                    </div>
+                  )}
+                </div>
+              )}
+            </TabsContent>
+
+            <TabsContent value="polls">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {polls.map((poll) => (
+                  <div key={poll.id} className="group relative p-0.5 rounded-lg bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500">
+                    <div className="relative rounded-lg bg-background p-1">
+                      <Card className="w-full border-0">
+                        <CardContent className="p-4">
+                          <PollCard poll={poll} onVote={handleVote} userAddress={address} />
+                        </CardContent>
+                      </Card>
+                    </div>
+                  </div>
+                ))}
+                {polls.length === 0 && (
+                  <div className="col-span-full text-center py-8 text-muted-foreground">
+                    No polls available
+                  </div>
+                )}
+              </div>
+            </TabsContent>
+
+            <TabsContent value="raffles">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {raffles.map((raffle) => (
+                  <div key={raffle.id} className="group relative p-0.5 rounded-lg bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500">
+                    <div className="relative rounded-lg bg-background p-1">
+                      <Card className="w-full border-0">
+                        <CardContent className="p-4">
+                          <div className="space-y-4">
+                            <div>
+                              <h3 className="font-semibold">{raffle.prize}</h3>
+                              <p className="text-sm text-muted-foreground">
+                                Ticket Price: {formatEther(raffle.ticketPrice)} ETH
+                              </p>
+                            </div>
+                            <Button 
+                              className="w-full" 
+                              onClick={() => buyTicket(raffle.id)}
+                              disabled={raffle.ended}
+                            >
+                              {raffle.ended ? 'Raffle Ended' : 'Buy Ticket'}
+                            </Button>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </div>
+                  </div>
+                ))}
+                {raffles.length === 0 && (
+                  <div className="col-span-full text-center py-8 text-muted-foreground">
+                    No raffles available
+                  </div>
+                )}
+              </div>
+            </TabsContent>
+
+            <TabsContent value="staking">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {stakes.map((stake) => (
+                  <div key={stake.id} className="group relative p-0.5 rounded-lg bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500">
+                    <div className="relative rounded-lg bg-background p-1">
+                      <Card className="w-full border-0">
+                        <CardContent className="p-4">
+                          <StakeCard stake={stake} onStake={handleStake} userAddress={address} />
+                        </CardContent>
+                      </Card>
+                    </div>
+                  </div>
+                ))}
+                {stakes.length === 0 && (
+                  <div className="col-span-full text-center py-8 text-muted-foreground">
+                    No staking pools available
+                  </div>
+                )}
+              </div>
+            </TabsContent>
+          </Tabs>
+        </div>
+      </div>
+
+      {showCreateBetModal && (
+        <CreateBetModal
+          onClose={() => setShowCreateBetModal(false)}
+          onCreate={handleCreateBet}
+        />
+      )}
+
+      {showCreatePollModal && (
+        <CreatePollModal
+          onClose={() => setShowCreatePollModal(false)}
+          onCreate={handleCreatePoll}
+        />
+      )}
+
+      {showCreateRaffleModal && (
+        <CreateRaffleModal
+          onClose={() => setShowCreateRaffleModal(false)}
+          onCreate={handleCreateRaffle}
+        />
+      )}
+
+      {showCreateStakeModal && (
+        <CreateStakeModal
+          onClose={() => setShowCreateStakeModal(false)}
+          onCreate={handleCreateStake}
+        />
+      )}
+    </div>
   );
 }

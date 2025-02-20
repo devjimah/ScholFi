@@ -1,20 +1,27 @@
-import { Inter } from 'next/font/google'
-import './globals.css'
-import { Providers } from './providers'
+import { Inter } from 'next/font/google';
+import './globals.css';
+import { AuthProvider } from '@/contexts/AuthContext';
+import NotificationSystem from '@/app/components/ui/NotificationSystem';
+import { Providers } from './providers';
 
-const inter = Inter({ subsets: ['latin'] })
+const inter = Inter({ subsets: ['latin'] });
 
 export const metadata = {
-  title: 'ScholFi Betting Platform',
-  description: 'A decentralized betting platform built on Ethereum',
-}
+  title: 'ScholFi',
+  description: 'Decentralized betting platform for students',
+};
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en">
-      <body className={inter.className}>
-        <Providers>{children}</Providers>
+    <html lang="en" suppressHydrationWarning>
+      <body className={inter.className} suppressHydrationWarning>
+        <Providers>
+          <AuthProvider>
+            <NotificationSystem />
+            {children}
+          </AuthProvider>
+        </Providers>
       </body>
     </html>
-  )
+  );
 }

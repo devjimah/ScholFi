@@ -6,6 +6,15 @@ import { X } from 'lucide-react'
 
 const NOTIFICATION_TTL = 5000 // Time to live in milliseconds
 
+// Define notify function at the top level
+export const notify = (type, message, ttl = NOTIFICATION_TTL) => {
+  window.dispatchEvent(
+    new CustomEvent('scholfi:notification', {
+      detail: { type, message, ttl }
+    })
+  )
+}
+
 export default function NotificationSystem() {
   const [notifications, setNotifications] = useState([])
 
@@ -31,15 +40,6 @@ export default function NotificationSystem() {
     setNotifications(prev => prev.filter(n => n.id !== id))
   }
 
-  // Helper function to emit notifications
-  const notify = (type, message, ttl = NOTIFICATION_TTL) => {
-    window.dispatchEvent(
-      new CustomEvent('scholfi:notification', {
-        detail: { type, message, ttl }
-      })
-    )
-  }
-
   return (
     <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2">
       <AnimatePresence>
@@ -50,32 +50,23 @@ export default function NotificationSystem() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, scale: 0.95 }}
             className={`
-              relative p-4 rounded-lg shadow-lg backdrop-blur-sm
-              ${type === 'success' && 'bg-green-500/80 text-white'}
-              ${type === 'error' && 'bg-red-500/80 text-white'}
-              ${type === 'info' && 'bg-blue-500/80 text-white'}
-              ${type === 'warning' && 'bg-yellow-500/80 text-white'}
+              min-w-[300px] p-4 rounded-lg shadow-lg
+              ${type === 'error' ? 'bg-red-500' : 'bg-green-500'}
+              text-white
             `}
           >
-            <button
-              onClick={() => removeNotification(id)}
-              className="absolute top-1 right-1 p-1 rounded-full hover:bg-black/10"
-            >
-              <X size={14} />
-            </button>
-            <p className="pr-4">{message}</p>
+            <div className="flex items-center justify-between">
+              <p>{message}</p>
+              <button
+                onClick={() => removeNotification(id)}
+                className="ml-4 hover:opacity-75"
+              >
+                <X size={18} />
+              </button>
+            </div>
           </motion.div>
         ))}
       </AnimatePresence>
     </div>
-  )
-}
-
-// Export helper function
-export const notify = (type, message, ttl = NOTIFICATION_TTL) => {
-  window.dispatchEvent(
-    new CustomEvent('scholfi:notification', {
-      detail: { type, message, ttl }
-    })
   )
 }

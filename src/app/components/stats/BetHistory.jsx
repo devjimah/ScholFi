@@ -1,78 +1,112 @@
 'use client';
 
-import { useState } from 'react';
+import { formatDistanceToNow } from 'date-fns';
+import { formatEther } from 'viem';
 import { useAccount } from 'wagmi';
-import BetCard from '../betting/BetCard';
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Check, X, Clock, Trophy, ArrowRight } from 'lucide-react';
 
 export default function BetHistory({ bets = [] }) {
   const { address } = useAccount();
-  const [filter, setFilter] = useState('all');
+
+  const getInitials = (address) => {
+    return address ? `${address.slice(0, 2)}${address.slice(-2)}` : '??';
+  };
+
+  const getBetStatus = (bet) => {
+    if (bet.resolved) {
+      return {
+        label: 'Completed',
+        color: 'text-green-500',
+        bgColor: 'bg-green-500/10',
+        icon: Check
+      };
+    }
+    if (bet.challenger) {
+      return {
+        label: 'In Progress',
+        color: 'text-yellow-500',
+        bgColor: 'bg-yellow-500/10',
+        icon: Clock
+      };
+    }
+    return {
+      label: 'Open',
+      color: 'text-blue-500',
+      bgColor: 'bg-blue-500/10',
+      icon: ArrowRight
+    };
+  };
+
+  const getActivityDescription = (bet) => {
+    if (bet.resolved) {
+      return `${bet.winner === address ? 'Won' : 'Lost'} bet: ${bet.description}`;
+    }
+    if (bet.challenger) {
+      return `Matched bet: ${bet.description}`;
+    }
+    return `Created bet: ${bet.description}`;
+  };
 
   const userBets = bets.filter(
     bet => bet.creator === address || bet.challenger === address
   );
 
-  const filteredBets = userBets.filter(bet => {
-    if (filter === 'all') return true;
-    if (filter === 'won') return bet.status === 'won';
-    if (filter === 'lost') return bet.status === 'lost';
-    return true;
-  });
+  const sortedBets = [...userBets].sort((a, b) => b.createdAt - a.createdAt);
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-semibold text-gray-900 dark:text-white">Your Bet History</h2>
-        <div className="flex gap-2">
-          <button
-            onClick={() => setFilter('all')}
-            className={`px-3 py-1 rounded-full text-sm font-medium ${
-              filter === 'all'
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
-            }`}
-          >
-            All
-          </button>
-          <button
-            onClick={() => setFilter('won')}
-            className={`px-3 py-1 rounded-full text-sm font-medium ${
-              filter === 'won'
-                ? 'bg-green-600 text-white'
-                : 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
-            }`}
-          >
-            Won
-          </button>
-          <button
-            onClick={() => setFilter('lost')}
-            className={`px-3 py-1 rounded-full text-sm font-medium ${
-              filter === 'lost'
-                ? 'bg-red-600 text-white'
-                : 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
-            }`}
-          >
-            Lost
-          </button>
-        </div>
-      </div>
+    <Card>
+      <CardHeader>
+        <CardTitle>Recent Activities</CardTitle>
+      </CardHeader>
+      <CardContent className="max-h-[400px] overflow-auto pr-4">
+        <div className="space-y-6">
+          {sortedBets.map((bet) => {
+            const status = getBetStatus(bet);
+            const StatusIcon = status.icon;
 
-      {filteredBets.length === 0 ? (
-        <div className="text-center py-8">
-          <p className="text-gray-500 dark:text-gray-400">You haven't participated in any bets yet</p>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {filteredBets.map((bet) => (
-            <div
-              key={bet.id}
-              className="flex justify-between items-center p-4 bg-gray-50 dark:bg-gray-700 rounded-lg"
-            >
-              <BetCard bet={bet} showActions={false} />
+            return (
+              <div key={bet.id} className="flex items-start space-x-4">
+                <div className={`h-9 w-9 rounded-full flex items-center justify-center ${status.bgColor}`}>
+                  <StatusIcon className={`w-5 h-5 ${status.color}`} />
+                </div>
+                <div className="flex-1 space-y-1">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-medium leading-none">
+                      {getActivityDescription(bet)}
+                    </p>
+                    <div className={`flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${status.bgColor} ${status.color}`}>
+                      {status.label}
+                    </div>
+                  </div>
+                  <div className="flex items-center text-sm text-muted-foreground">
+                    <span className="font-medium text-primary">
+                      {formatEther(bet.amount)} ETH
+                    </span>
+                    <span className="mx-1">•</span>
+                    <span>
+                      {formatDistanceToNow(bet.createdAt, { addSuffix: true })}
+                    </span>
+                  </div>
+                  {bet.resolved && (
+                    <div className="flex items-center mt-2">
+                      <Trophy className="w-4 h-4 text-yellow-500 mr-1" />
+                      <span className="text-sm font-medium">
+                        Winner: {bet.winner.slice(0, 6)}...{bet.winner.slice(-4)}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+          {sortedBets.length === 0 && (
+            <div className="text-center text-muted-foreground py-8">
+              No recent activities
             </div>
-          ))}
+          )}
         </div>
-      )}
-    </div>
+      </CardContent>
+    </Card>
   );
 }

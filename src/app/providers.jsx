@@ -12,27 +12,31 @@ import {
   ledgerWallet,
 } from '@rainbow-me/rainbowkit/wallets';
 import { configureChains, createConfig, WagmiConfig } from 'wagmi';
-import { sepolia } from 'wagmi/chains';
+import { mainnet, sepolia } from 'wagmi/chains';
 import { publicProvider } from 'wagmi/providers/public';
 import { alchemyProvider } from 'wagmi/providers/alchemy';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import '@rainbow-me/rainbowkit/styles.css';
 
-// Fallback values for development - DO NOT use in production
-const FALLBACK_ALCHEMY_KEY = "demo"; // This will fail but prevent errors
-const FALLBACK_PROJECT_ID = "demo"; // This will fail but prevent errors
+// Use environment variables
+const projectId = process.env.NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID;
+const alchemyKey = process.env.NEXT_PUBLIC_ALCHEMY_API_KEY;
+
+if (!projectId) {
+  throw new Error('WalletConnect Project ID is required. Please set NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID in your .env.local file');
+}
+
+if (!alchemyKey) {
+  throw new Error('Alchemy API Key is required. Please set NEXT_PUBLIC_ALCHEMY_API_KEY in your .env.local file');
+}
 
 const { chains, publicClient, webSocketPublicClient } = configureChains(
-  [sepolia],
+  [sepolia, mainnet],
   [
-    alchemyProvider({ 
-      apiKey: process.env.NEXT_PUBLIC_ALCHEMY_API_KEY || FALLBACK_ALCHEMY_KEY
-    }),
+    alchemyProvider({ apiKey: alchemyKey }),
     publicProvider()
   ]
 );
-
-const projectId = process.env.NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID || FALLBACK_PROJECT_ID;
 
 const { wallets } = getDefaultWallets({
   appName: 'ScholFi',
@@ -40,17 +44,15 @@ const { wallets } = getDefaultWallets({
   chains,
 });
 
-const demoWallets = [
-  argentWallet({ projectId, chains }),
-  trustWallet({ projectId, chains }),
-  ledgerWallet({ projectId, chains }),
-];
-
 const connectors = connectorsForWallets([
   ...wallets,
   {
     groupName: 'Other',
-    wallets: demoWallets,
+    wallets: [
+      argentWallet({ projectId, chains }),
+      trustWallet({ projectId, chains }),
+      ledgerWallet({ projectId, chains }),
+    ],
   },
 ]);
 
@@ -61,16 +63,21 @@ const wagmiConfig = createConfig({
   webSocketPublicClient,
 });
 
-const queryClient = new QueryClient()
+const queryClient = new QueryClient();
 
 export function Providers({ children }) {
   const [mounted, setMounted] = React.useState(false);
+
   React.useEffect(() => setMounted(true), []);
 
   return (
     <WagmiConfig config={wagmiConfig}>
       <QueryClientProvider client={queryClient}>
-        <RainbowKitProvider chains={chains}>
+        <RainbowKitProvider 
+          chains={chains}
+          showRecentTransactions={true}
+          coolMode
+        >
           {mounted && children}
         </RainbowKitProvider>
       </QueryClientProvider>
