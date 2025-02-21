@@ -2,101 +2,168 @@
 
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardFooter } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { formatDistanceToNow } from 'date-fns';
 import { formatEther } from 'viem';
-import { Trophy, Clock, User, Coins } from 'lucide-react';
+import { Trophy, Clock, User, Coins, Swords, Users } from 'lucide-react';
+import { useContract } from '@/hooks/useContract';
 
-export default function BetCard({ bet, onAccept, userAddress }) {
-  const [isAccepting, setIsAccepting] = useState(false);
+export default function BetCard({ bet, userAddress }) {
+  const { acceptBet, isAcceptBetLoading } = useContract();
 
   const handleAccept = async () => {
     try {
-      setIsAccepting(true);
-      await onAccept(bet.id, bet.amount);
+      await acceptBet(bet.id, formatEther(bet.amount));
     } catch (error) {
       console.error('Error accepting bet:', error);
-    } finally {
-      setIsAccepting(false);
     }
   };
 
   const isCreator = bet.creator === userAddress;
   const isChallenger = bet.challenger === userAddress;
-  const canAccept = !isCreator && !bet.challenger && !bet.resolved;
+  const canAccept = !isCreator && !bet.challenger && bet.state === 0; // BetState.Pending
+  const timeLeft = formatDistanceToNow(Number(bet.deadline) * 1000, { addSuffix: true });
+
+  const getStatusInfo = () => {
+    switch (bet.state) {
+      case 0: // Pending
+        return {
+          color: 'bg-blue-500/10 text-blue-500',
+          icon: Users,
+          text: 'Open for Challenge'
+        };
+      case 1: // Accepted
+        return {
+          color: 'bg-yellow-500/10 text-yellow-500',
+          icon: Swords,
+          text: 'Battle in Progress'
+        };
+      case 2: // Resolved
+        return {
+          color: 'bg-green-500/10 text-green-500',
+          icon: Trophy,
+          text: 'Bet Resolved'
+        };
+      case 3: // Cancelled
+        return {
+          color: 'bg-red-500/10 text-red-500',
+          icon: Clock,
+          text: 'Bet Cancelled'
+        };
+      default:
+        return null;
+    }
+  };
+
+  const status = getStatusInfo();
+  const StatusIcon = status?.icon;
+
+  const getAddressDisplay = (address) => {
+    if (!address) return '';
+    return `${address.slice(0, 6)}...${address.slice(-4)}`;
+  };
+
+  const getAvatarFallback = (address) => {
+    return address ? address.slice(2, 4).toUpperCase() : '??';
+  };
 
   return (
-    <div className="w-full space-y-4">
-      <div className="flex items-start justify-between">
-        <div className="space-y-1">
-          <h3 className="font-semibold">{bet.description}</h3>
-          <p className="text-sm text-muted-foreground">
-            Created {formatDistanceToNow(bet.createdAt, { addSuffix: true })}
-          </p>
-        </div>
-        <div className={`px-2 py-1 rounded-full text-xs font-medium ${
-          bet.resolved 
-            ? 'bg-green-500/10 text-green-500' 
-            : bet.challenger 
-              ? 'bg-yellow-500/10 text-yellow-500'
-              : 'bg-blue-500/10 text-blue-500'
-        }`}>
-          {bet.resolved 
-            ? 'Resolved' 
-            : bet.challenger 
-              ? 'In Progress'
-              : 'Open'}
-        </div>
-      </div>
-
-      <div className="space-y-3">
-        <div className="flex items-center justify-between text-sm">
-          <span className="flex items-center gap-1">
-            <Coins className="h-4 w-4" />
-            Amount
-          </span>
-          <span className="font-medium">{formatEther(bet.amount)} ETH</span>
-        </div>
-
-        <div className="flex items-center justify-between text-sm">
-          <span className="flex items-center gap-1">
-            <User className="h-4 w-4" />
-            Creator
-          </span>
-          <span>{isCreator ? 'You' : `${bet.creator.slice(0, 6)}...${bet.creator.slice(-4)}`}</span>
-        </div>
-
-        {bet.challenger && (
-          <div className="flex items-center justify-between text-sm">
-            <span className="flex items-center gap-1">
-              <User className="h-4 w-4" />
-              Challenger
-            </span>
-            <span>{isChallenger ? 'You' : `${bet.challenger.slice(0, 6)}...${bet.challenger.slice(-4)}`}</span>
+    <Card className="w-full hover:shadow-lg transition-shadow">
+      <CardContent className="pt-6">
+        {/* Status Badge */}
+        <div className="flex items-center justify-between mb-4">
+          <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium ${status.color}`}>
+            <StatusIcon className="h-3.5 w-3.5" />
+            {status.text}
           </div>
-        )}
-
-        {bet.resolved && (
-          <div className="flex items-center justify-between text-sm">
-            <span className="flex items-center gap-1">
-              <Trophy className="h-4 w-4" />
-              Winner
-            </span>
-            <span className="text-green-500">
-              {bet.winner === userAddress ? 'You' : 'Opponent'}
-            </span>
+          <div className="flex items-center text-muted-foreground text-xs">
+            <Clock className="h-3.5 w-3.5 mr-1" />
+            {timeLeft}
           </div>
-        )}
-      </div>
+        </div>
 
+        {/* Description */}
+        <h3 className="font-semibold mb-4 line-clamp-2">{bet.description}</h3>
+
+        {/* Participants */}
+        <div className="space-y-3 mb-6">
+          {/* Creator */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Avatar className="h-6 w-6">
+                <AvatarFallback className="text-xs">
+                  {getAvatarFallback(bet.creator)}
+                </AvatarFallback>
+              </Avatar>
+              <span className="text-sm font-medium">
+                {isCreator ? 'You' : getAddressDisplay(bet.creator)}
+              </span>
+            </div>
+            <Badge variant="outline" className="text-xs">Creator</Badge>
+          </div>
+
+          {/* Challenger */}
+          {bet.challenger && (
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Avatar className="h-6 w-6">
+                  <AvatarFallback className="text-xs">
+                    {getAvatarFallback(bet.challenger)}
+                  </AvatarFallback>
+                </Avatar>
+                <span className="text-sm font-medium">
+                  {isChallenger ? 'You' : getAddressDisplay(bet.challenger)}
+                </span>
+              </div>
+              <Badge variant="outline" className="text-xs">Challenger</Badge>
+            </div>
+          )}
+
+          {/* Winner */}
+          {bet.winner && (
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Avatar className="h-6 w-6">
+                  <AvatarFallback className="text-xs">
+                    {getAvatarFallback(bet.winner)}
+                  </AvatarFallback>
+                </Avatar>
+                <span className="text-sm font-medium">
+                  {bet.winner === userAddress ? 'You' : getAddressDisplay(bet.winner)}
+                </span>
+              </div>
+              <Badge variant="outline" className="text-xs bg-yellow-500/10 text-yellow-500 border-yellow-500/20">
+                Winner
+              </Badge>
+            </div>
+          )}
+        </div>
+
+        {/* Amount */}
+        <div className="flex items-center justify-between py-3 px-4 bg-muted/50 rounded-lg">
+          <div className="flex items-center gap-2">
+            <Coins className="h-4 w-4 text-primary" />
+            <span className="text-sm font-medium">Stake Amount</span>
+          </div>
+          <span className="text-sm font-bold">{formatEther(bet.amount)} ETH</span>
+        </div>
+      </CardContent>
+
+      {/* Action Button */}
       {canAccept && (
-        <Button 
-          className="w-full" 
-          onClick={handleAccept}
-          disabled={isAccepting}
-        >
-          {isAccepting ? 'Accepting...' : 'Accept Challenge'}
-        </Button>
+        <CardFooter className="pt-2 pb-6">
+          <Button 
+            onClick={handleAccept} 
+            disabled={isAcceptBetLoading}
+            className="w-full"
+            size="lg"
+          >
+            {isAcceptBetLoading ? 'Accepting...' : 'Accept Challenge'}
+          </Button>
+        </CardFooter>
       )}
-    </div>
+    </Card>
   );
 }

@@ -1,56 +1,72 @@
 'use client';
 
 import { useState } from 'react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { parseEther } from 'viem';
+import { useContract } from '@/hooks/useContract';
 
-export default function CreateStakeModal({ onClose, onCreate }) {
-  const [name, setName] = useState('');
-  const [maxStake, setMaxStake] = useState('');
-  const [apy, setApy] = useState('');
-  const [duration, setDuration] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
+export default function CreateStakeModal({ open, onClose }) {
+  const { createStake } = useContract();
+  const [formData, setFormData] = useState({
+    name: '',
+    maxStake: '',
+    apy: '',
+    duration: '',
+  });
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    if (!name || !maxStake || !apy || !duration) {
-      return;
-    }
-
     try {
-      setIsSubmitting(true);
-      await onCreate({
-        name,
-        maxStake: parseEther(maxStake),
-        apy: parseFloat(apy),
-        duration: parseInt(duration),
+      // Convert values to appropriate formats
+      const maxStake = parseEther(formData.maxStake);
+      const apy = BigInt(Math.floor(parseFloat(formData.apy) * 100)); // Convert to basis points (e.g., 5% -> 500)
+      const duration = BigInt(Math.floor(parseFloat(formData.duration) * 24 * 60 * 60)); // Convert days to seconds
+
+      await createStake({
+        name: formData.name,
+        maxStake,
+        apy,
+        duration,
       });
+      
       onClose();
+      setFormData({
+        name: '',
+        maxStake: '',
+        apy: '',
+        duration: '',
+      });
     } catch (error) {
-      console.error('Error creating stake:', error);
-    } finally {
-      setIsSubmitting(false);
+      console.error('Error creating stake pool:', error);
     }
   };
 
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
+
   return (
-    <Dialog open onOpenChange={onClose}>
+    <Dialog open={open} onOpenChange={onClose}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Create New Staking Pool</DialogTitle>
+          <DialogTitle>Create Stake Pool</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="name">Pool Name</Label>
             <Input
               id="name"
+              name="name"
               placeholder="Enter pool name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
+              value={formData.name}
+              onChange={handleChange}
               required
             />
           </div>
@@ -58,12 +74,13 @@ export default function CreateStakeModal({ onClose, onCreate }) {
             <Label htmlFor="maxStake">Maximum Total Stake (ETH)</Label>
             <Input
               id="maxStake"
+              name="maxStake"
               type="number"
-              placeholder="Enter maximum stake"
-              value={maxStake}
-              onChange={(e) => setMaxStake(e.target.value)}
-              min="0"
               step="0.01"
+              min="0.01"
+              placeholder="Enter maximum stake"
+              value={formData.maxStake}
+              onChange={handleChange}
               required
             />
           </div>
@@ -71,12 +88,14 @@ export default function CreateStakeModal({ onClose, onCreate }) {
             <Label htmlFor="apy">APY (%)</Label>
             <Input
               id="apy"
+              name="apy"
               type="number"
-              placeholder="Enter APY percentage"
-              value={apy}
-              onChange={(e) => setApy(e.target.value)}
+              step="0.01"
               min="0"
-              max="1000"
+              max="100"
+              placeholder="Enter APY percentage"
+              value={formData.apy}
+              onChange={handleChange}
               required
             />
           </div>
@@ -84,27 +103,22 @@ export default function CreateStakeModal({ onClose, onCreate }) {
             <Label htmlFor="duration">Duration (days)</Label>
             <Input
               id="duration"
+              name="duration"
               type="number"
-              placeholder="Enter duration in days"
-              value={duration}
-              onChange={(e) => setDuration(e.target.value)}
+              step="1"
               min="1"
+              placeholder="Enter duration in days"
+              value={formData.duration}
+              onChange={handleChange}
               required
             />
           </div>
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={onClose}
-              disabled={isSubmitting}
-            >
+          <div className="flex justify-end space-x-2">
+            <Button type="button" variant="outline" onClick={onClose}>
               Cancel
             </Button>
-            <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? 'Creating...' : 'Create Pool'}
-            </Button>
-          </DialogFooter>
+            <Button type="submit">Create Pool</Button>
+          </div>
         </form>
       </DialogContent>
     </Dialog>

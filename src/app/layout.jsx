@@ -1,25 +1,22 @@
 import { Inter } from 'next/font/google';
+import Providers from './providers';
+import { Toaster } from 'sonner';
 import './globals.css';
-import { AuthProvider } from '@/contexts/AuthContext';
-import NotificationSystem from '@/app/components/ui/NotificationSystem';
-import { Providers } from './providers';
 
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata = {
   title: 'ScholFi',
-  description: 'Decentralized betting platform for students',
+  description: 'Decentralized Betting Platform for Students',
 };
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body className={inter.className} suppressHydrationWarning>
+    <html lang="en">
+      <body className={inter.className}>
         <Providers>
-          <AuthProvider>
-            <NotificationSystem />
-            {children}
-          </AuthProvider>
+          {children}
+          <Toaster richColors closeButton position="top-right" />
         </Providers>
       </body>
     </html>

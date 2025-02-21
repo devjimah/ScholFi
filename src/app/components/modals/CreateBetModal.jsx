@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { parseEther } from 'viem';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -9,7 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { notify } from '@/app/components/ui/NotificationSystem';
 
-export default function CreateBetModal({ onClose, onCreate }) {
+export default function CreateBetModal({ open, onClose, onCreate }) {
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -18,7 +17,20 @@ export default function CreateBetModal({ onClose, onCreate }) {
     e.preventDefault();
     
     if (!description || !amount) {
-      notify('error', 'Please fill in all fields');
+      notify({
+        title: 'Error',
+        description: 'Please fill in all fields',
+        type: 'error'
+      });
+      return;
+    }
+
+    if (isNaN(amount) || parseFloat(amount) <= 0) {
+      notify({
+        title: 'Error',
+        description: 'Please enter a valid amount',
+        type: 'error'
+      });
       return;
     }
 
@@ -26,20 +38,33 @@ export default function CreateBetModal({ onClose, onCreate }) {
       setIsSubmitting(true);
       await onCreate({
         description,
-        amount: parseEther(amount)
+        amount
       });
-      notify('success', 'Bet created successfully!');
+      setDescription('');
+      setAmount('');
       onClose();
     } catch (error) {
       console.error('Error creating bet:', error);
-      notify('error', error.message || 'Failed to create bet');
+      notify({
+        title: 'Error',
+        description: error.message || 'Failed to create bet',
+        type: 'error'
+      });
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  const handleAmountChange = (e) => {
+    const value = e.target.value;
+    // Only allow numbers and decimals
+    if (value === '' || /^\d*\.?\d*$/.test(value)) {
+      setAmount(value);
+    }
+  };
+
   return (
-    <Dialog open onOpenChange={onClose}>
+    <Dialog open={open} onOpenChange={onClose}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Create New Bet</DialogTitle>
@@ -59,12 +84,10 @@ export default function CreateBetModal({ onClose, onCreate }) {
             <Label htmlFor="amount">Amount (ETH)</Label>
             <Input
               id="amount"
-              type="number"
-              step="0.001"
-              min="0"
+              type="text"
               placeholder="0.1"
               value={amount}
-              onChange={(e) => setAmount(e.target.value)}
+              onChange={handleAmountChange}
               required
             />
           </div>

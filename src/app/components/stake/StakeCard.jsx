@@ -3,111 +3,149 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { formatDistanceToNow } from 'date-fns';
+import { Label } from '@/components/ui/label';
 import { formatEther, parseEther } from 'viem';
+import { useContract } from '@/hooks/useContract';
 import { Progress } from '@/components/ui/progress';
-import { Coins, Clock, Trophy } from 'lucide-react';
+import { Card, CardContent } from '@/components/ui/card';
+import { Wallet, Timer, TrendingUp, User } from 'lucide-react';
 
-export default function StakeCard({ stake, onStake, userAddress }) {
-  const [amount, setAmount] = useState('');
-  const [isStaking, setIsStaking] = useState(false);
+export default function StakeCard({ stake, userAddress }) {
+  const [stakeAmount, setStakeAmount] = useState('');
+  const { stake: stakeInPool, unstake } = useContract();
 
-  const totalStaked = stake.stakes.reduce((sum, s) => sum + s.amount, 0n);
-  const userStake = stake.stakes.find(s => s.staker === userAddress)?.amount || 0n;
-  const apy = stake.apy || 0;
-  const timeLeft = stake.endTime ? stake.endTime - Date.now() : 0;
-  const daysLeft = Math.max(0, Math.floor(timeLeft / (1000 * 60 * 60 * 24)));
-  
-  const handleStake = async () => {
-    if (!amount) return;
-    
+  const handleStake = async (e) => {
+    e.preventDefault();
     try {
-      setIsStaking(true);
-      await onStake(stake.id, parseEther(amount));
-      setAmount('');
+      if (!stakeAmount || isNaN(stakeAmount) || parseFloat(stakeAmount) <= 0) {
+        throw new Error('Please enter a valid stake amount');
+      }
+      await stakeInPool(stake.id, stakeAmount);
+      setStakeAmount('');
     } catch (error) {
       console.error('Error staking:', error);
-    } finally {
-      setIsStaking(false);
+      notify({
+        title: 'Error',
+        description: error.message || 'Failed to stake',
+        type: 'error',
+      });
     }
   };
 
+  const handleUnstake = async () => {
+    try {
+      await unstake(stake.id);
+    } catch (error) {
+      console.error('Error unstaking:', error);
+    }
+  };
+
+  const canStake = stake.active && (!stake.userStake || !stake.userStake.active);
+  const canUnstake = stake.userStake?.active && 
+    BigInt(stake.userStake?.startTime || 0) + BigInt(stake.duration) <= BigInt(Math.floor(Date.now() / 1000));
+
+  // Convert BigInt values to regular numbers for display
+  const maxStake = Number(formatEther(BigInt(stake.maxStake)));
+  const totalStaked = Number(formatEther(BigInt(stake.totalStaked)));
+  const remainingCapacity = maxStake - totalStaked;
+  const apyPercent = Number(stake.apy) / 100;
+  const durationDays = Number(stake.duration) / (24 * 60 * 60);
+  const progress = (totalStaked / maxStake) * 100;
+
   return (
-    <div className="space-y-4">
-      <div className="flex items-start justify-between">
-        <div>
-          <h3 className="font-semibold">{stake.name}</h3>
-          <p className="text-sm text-muted-foreground">
-            Created {formatDistanceToNow(stake.createdAt, { addSuffix: true })}
-          </p>
-        </div>
-        <div className={`px-2 py-1 rounded-full text-xs font-medium ${
-          stake.locked ? 'bg-red-500/10 text-red-500' : 'bg-green-500/10 text-green-500'
-        }`}>
-          {stake.locked ? 'Locked' : 'Active'}
-        </div>
-      </div>
-
-      <div className="space-y-2">
-        <div className="flex items-center justify-between text-sm">
-          <span className="flex items-center gap-1">
-            <Coins className="h-4 w-4" />
-            APY
-          </span>
-          <span className="font-medium text-green-500">{apy}%</span>
-        </div>
-        <div className="flex items-center justify-between text-sm">
-          <span className="flex items-center gap-1">
-            <Clock className="h-4 w-4" />
-            Time Left
-          </span>
-          <span>{daysLeft} days</span>
-        </div>
-        <div className="flex items-center justify-between text-sm">
-          <span className="flex items-center gap-1">
-            <Trophy className="h-4 w-4" />
-            Total Staked
-          </span>
-          <span>{formatEther(totalStaked)} ETH</span>
-        </div>
-        
-        <div className="pt-2">
-          <div className="flex items-center justify-between text-sm mb-1">
-            <span>Pool Progress</span>
-            <span>{formatEther(totalStaked)}/{formatEther(stake.maxStake)} ETH</span>
+    <Card>
+      <CardContent className="p-6">
+        <div className="space-y-4">
+          {/* Header */}
+          <div className="flex justify-between items-start">
+            <div>
+              <h3 className="text-lg font-semibold">{stake.name}</h3>
+              <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
+                <User className="w-4 h-4" />
+                <span className="truncate">
+                  {stake.creator === userAddress ? 'Created by you' : `${stake.creator.slice(0, 6)}...${stake.creator.slice(-4)}`}
+                </span>
+              </div>
+            </div>
+            <div className="flex items-center gap-4">
+              <div className="text-right">
+                <div className="flex items-center gap-1 text-sm font-medium text-green-500">
+                  <TrendingUp className="w-4 h-4" />
+                  {apyPercent.toFixed(2)}% APY
+                </div>
+                <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                  <Timer className="w-4 h-4" />
+                  {Math.floor(durationDays)} days
+                </div>
+              </div>
+            </div>
           </div>
-          <Progress 
-            value={(Number(totalStaked) * 100) / Number(stake.maxStake)} 
-            className="h-2" 
-          />
-        </div>
-      </div>
 
-      {!stake.locked && (
-        <div className="space-y-2 pt-2">
-          <div className="flex gap-2">
-            <Input
-              type="number"
-              placeholder="Amount to stake"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              min="0"
-              step="0.01"
-            />
-            <Button 
-              onClick={handleStake}
-              disabled={isStaking || !amount}
-            >
-              {isStaking ? 'Staking...' : 'Stake'}
+          {/* Progress Bar */}
+          <div className="space-y-2">
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Total Staked</span>
+              <span className="font-medium">{totalStaked.toFixed(4)} / {maxStake.toFixed(4)} ETH</span>
+            </div>
+            <Progress value={progress} className="h-2" />
+          </div>
+
+          {/* User's Stake */}
+          {stake.userStake?.active && (
+            <div className="p-3 bg-secondary/50 rounded-lg">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Wallet className="w-4 h-4 text-muted-foreground" />
+                  <span className="text-sm font-medium">Your Stake</span>
+                </div>
+                <span className="text-sm font-medium">
+                  {Number(formatEther(BigInt(stake.userStake.amount))).toFixed(4)} ETH
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Actions */}
+          {canStake && (
+            <form onSubmit={handleStake} className="space-y-2">
+              <div className="flex items-center gap-2">
+                <div className="flex-1">
+                  <Label htmlFor="stakeAmount" className="sr-only">
+                    Stake Amount
+                  </Label>
+                  <Input
+                    id="stakeAmount"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    max={remainingCapacity}
+                    placeholder="Amount to stake"
+                    value={stakeAmount}
+                    onChange={(e) => setStakeAmount(e.target.value)}
+                    required
+                  />
+                </div>
+                <Button type="submit" className="shrink-0">Stake</Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Available capacity: {remainingCapacity.toFixed(4)} ETH
+              </p>
+            </form>
+          )}
+
+          {canUnstake && (
+            <Button onClick={handleUnstake} className="w-full">
+              Unstake {Number(formatEther(BigInt(stake.userStake.amount))).toFixed(4)} ETH
             </Button>
-          </div>
-          {userStake > 0n && (
-            <p className="text-sm text-muted-foreground">
-              Your stake: {formatEther(userStake)} ETH
+          )}
+
+          {stake.userStake?.active && !canUnstake && (
+            <p className="text-sm text-center text-muted-foreground">
+              Unlocks in {Math.ceil((Number(BigInt(stake.userStake.startTime) + BigInt(stake.duration)) - Date.now() / 1000) / (24 * 60 * 60))} days
             </p>
           )}
         </div>
-      )}
-    </div>
+      </CardContent>
+    </Card>
   );
 }

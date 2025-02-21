@@ -4,84 +4,124 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { formatDistanceToNow } from 'date-fns';
+import { useContract } from '@/hooks/useContract';
+import { notify } from '@/app/components/ui/NotificationSystem';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Badge } from '@/components/ui/badge';
 
-export default function PollCard({ poll, onVote, userAddress }) {
+export default function PollCard({ poll, userAddress }) {
   const [selectedOption, setSelectedOption] = useState(null);
   const [isVoting, setIsVoting] = useState(false);
+  const { vote } = useContract();
 
-  const totalVotes = poll.options.reduce((sum, opt) => sum + opt.votes, 0);
-  const hasVoted = poll.voters.includes(userAddress);
-  const isCreator = poll.creator === userAddress;
+  const totalVotes = poll?.options?.reduce((sum, opt) => sum + Number(opt?.votes || 0), 0) || 0;
+  const hasVoted = poll?.voters?.includes(userAddress) || false;
+  const isCreator = poll?.creator === userAddress;
+  const isActive = !poll?.resolved && Number(poll?.endTime) * 1000 > Date.now();
 
   const handleVote = async () => {
-    if (selectedOption === null) return;
+    if (selectedOption === null) {
+      notify({
+        title: 'Error',
+        description: 'Please select an option',
+        type: 'error'
+      });
+      return;
+    }
+
+    if (!poll?.id) {
+      notify({
+        title: 'Error',
+        description: 'Invalid poll data',
+        type: 'error'
+      });
+      return;
+    }
     
     try {
       setIsVoting(true);
-      await onVote(poll.id, selectedOption);
+      await vote(Number(poll.id), Number(selectedOption));
+      setSelectedOption(null);
     } catch (error) {
       console.error('Error voting:', error);
+      notify({
+        title: 'Error',
+        description: error.message || 'Failed to vote',
+        type: 'error'
+      });
     } finally {
       setIsVoting(false);
     }
   };
 
+  if (!poll) return null;
+
+  const creatorAddress = poll.creator || '0x';
+  const shortAddress = `${creatorAddress.slice(0, 6)}...${creatorAddress.slice(-4)}`;
+
   return (
-    <div className="space-y-4">
-      <div className="flex items-start justify-between">
-        <div>
-          <h3 className="font-semibold">{poll.description}</h3>
-          <p className="text-sm text-muted-foreground">
-            Created {formatDistanceToNow(poll.createdAt, { addSuffix: true })}
-          </p>
-        </div>
-        <div className={`px-2 py-1 rounded-full text-xs font-medium ${
-          poll.resolved ? 'bg-green-500/10 text-green-500' : 'bg-blue-500/10 text-blue-500'
-        }`}>
-          {poll.resolved ? 'Closed' : 'Active'}
-        </div>
-      </div>
-
-      <div className="space-y-2">
-        {poll.options.map((option, index) => {
-          const percentage = totalVotes > 0 ? (option.votes * 100) / totalVotes : 0;
-          
-          return (
-            <div key={index} className="space-y-1">
-              <div className="flex items-center justify-between text-sm">
-                <span>{option.text}</span>
-                <span className="text-muted-foreground">{percentage.toFixed(1)}%</span>
-              </div>
-              <Progress value={percentage} className="h-2" />
-              {!hasVoted && !poll.resolved && (
-                <Button
-                  variant={selectedOption === index ? "default" : "outline"}
-                  size="sm"
-                  className="w-full mt-1"
-                  onClick={() => setSelectedOption(index)}
-                >
-                  {selectedOption === index ? 'Selected' : 'Select'}
-                </Button>
-              )}
+    <Card className="w-full">
+      <CardHeader className="space-y-1">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <Avatar className="h-8 w-8">
+              <AvatarFallback>
+                {shortAddress.slice(2, 4)}
+              </AvatarFallback>
+            </Avatar>
+            <div>
+              <CardTitle className="text-sm font-medium">{shortAddress}</CardTitle>
+              <CardDescription className="text-xs">
+                {formatDistanceToNow(Number(poll.endTime) * 1000, { addSuffix: true })}
+              </CardDescription>
             </div>
-          );
-        })}
-      </div>
-
-      {!hasVoted && !poll.resolved && selectedOption !== null && (
+          </div>
+          <Badge variant={isActive ? "success" : "destructive"}>
+            {isActive ? 'Active' : 'Closed'}
+          </Badge>
+        </div>
+        <CardTitle>{poll.description}</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="space-y-3">
+          {poll.options?.map((option, index) => {
+            const votes = Number(option?.votes || 0);
+            const percentage = totalVotes > 0 ? (votes * 100) / totalVotes : 0;
+            
+            return (
+              <div key={index} className="space-y-1">
+                <div className="flex items-center justify-between text-sm">
+                  <label className="flex items-center space-x-2">
+                    <input
+                      type="radio"
+                      name={`poll-option-${poll.id}`}
+                      disabled={!isActive || hasVoted}
+                      checked={selectedOption === index}
+                      onChange={() => setSelectedOption(index)}
+                      className="form-radio"
+                    />
+                    <span>{option.text}</span>
+                  </label>
+                  <span className="text-muted-foreground text-xs">
+                    {votes} votes ({percentage.toFixed(1)}%)
+                  </span>
+                </div>
+                <Progress value={percentage} className="h-1.5" />
+              </div>
+            );
+          })}
+        </div>
+      </CardContent>
+      <CardFooter>
         <Button 
-          className="w-full"
           onClick={handleVote}
-          disabled={isVoting}
+          disabled={!isActive || hasVoted || selectedOption === null || isVoting}
+          className="w-full"
         >
-          {isVoting ? 'Voting...' : 'Submit Vote'}
+          {hasVoted ? 'Already Voted' : isVoting ? 'Voting...' : 'Vote'}
         </Button>
-      )}
-
-      <div className="flex items-center justify-between text-sm text-muted-foreground">
-        <span>{totalVotes} votes</span>
-        {hasVoted && <span>You've voted</span>}
-      </div>
-    </div>
+      </CardFooter>
+    </Card>
   );
 }

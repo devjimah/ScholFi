@@ -3,17 +3,27 @@
 import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { X } from 'lucide-react'
-
-const NOTIFICATION_TTL = 5000 // Time to live in milliseconds
+import { toast } from 'sonner';
 
 // Define notify function at the top level
-export const notify = (type, message, ttl = NOTIFICATION_TTL) => {
-  window.dispatchEvent(
-    new CustomEvent('scholfi:notification', {
-      detail: { type, message, ttl }
-    })
-  )
-}
+export const notify = (type, message) => {
+  switch (type) {
+    case 'success':
+      toast.success(message);
+      break;
+    case 'error':
+      toast.error(message);
+      break;
+    case 'warning':
+      toast.warning(message);
+      break;
+    case 'info':
+      toast.info(message);
+      break;
+    default:
+      toast(message);
+  }
+};
 
 export default function NotificationSystem() {
   const [notifications, setNotifications] = useState([])
@@ -21,7 +31,7 @@ export default function NotificationSystem() {
   // Custom event listener for adding notifications
   useEffect(() => {
     const handleNewNotification = (event) => {
-      const { type, message, ttl = NOTIFICATION_TTL } = event.detail
+      const { type, message, ttl = 5000 } = event.detail
       const id = Date.now()
       
       setNotifications(prev => [...prev, { id, type, message }])

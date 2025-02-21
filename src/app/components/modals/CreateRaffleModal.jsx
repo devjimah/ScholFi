@@ -1,14 +1,15 @@
 'use client';
 
 import { useState } from 'react';
-import { parseEther } from 'viem';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { notify } from '@/app/components/ui/NotificationSystem';
+import { useContract } from '@/hooks/useContract';
 
-export default function CreateRaffleModal({ onClose, onCreate }) {
+export default function CreateRaffleModal({ open, onClose }) {
+  const { createRaffle } = useContract();
   const [ticketPrice, setTicketPrice] = useState('');
   const [duration, setDuration] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -17,68 +18,86 @@ export default function CreateRaffleModal({ onClose, onCreate }) {
     e.preventDefault();
     
     if (!ticketPrice || !duration) {
-      notify('error', 'Please fill in all fields');
+      notify({
+        title: 'Error',
+        description: 'Please fill in all fields',
+        type: 'error'
+      });
+      return;
+    }
+
+    if (isNaN(ticketPrice) || parseFloat(ticketPrice) <= 0) {
+      notify({
+        title: 'Error',
+        description: 'Please enter a valid ticket price',
+        type: 'error'
+      });
+      return;
+    }
+
+    if (isNaN(duration) || parseFloat(duration) <= 0) {
+      notify({
+        title: 'Error',
+        description: 'Please enter a valid duration in days',
+        type: 'error'
+      });
       return;
     }
 
     try {
       setIsSubmitting(true);
-      await onCreate({
-        ticketPrice: parseEther(ticketPrice),
-        duration: parseInt(duration) * 3600 // Convert hours to seconds
-      });
-      notify('success', 'Raffle created successfully!');
+      await createRaffle(parseFloat(ticketPrice), parseFloat(duration));
+      
       onClose();
+      setTicketPrice('');
+      setDuration('');
+      setIsSubmitting(false);
     } catch (error) {
       console.error('Error creating raffle:', error);
-      notify('error', error.message || 'Failed to create raffle');
-    } finally {
+      notify({
+        title: 'Error',
+        description: error.message || 'Failed to create raffle',
+        type: 'error'
+      });
       setIsSubmitting(false);
     }
   };
 
   return (
-    <Dialog open onOpenChange={onClose}>
+    <Dialog open={open} onOpenChange={onClose}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Create New Raffle</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
+          <div>
             <Label htmlFor="ticketPrice">Ticket Price (ETH)</Label>
             <Input
               id="ticketPrice"
               type="number"
               step="0.001"
               min="0"
-              placeholder="0.1"
               value={ticketPrice}
               onChange={(e) => setTicketPrice(e.target.value)}
-              required
+              placeholder="0.001"
             />
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="duration">Duration (hours)</Label>
+          <div>
+            <Label htmlFor="duration">Duration (days)</Label>
             <Input
               id="duration"
               type="number"
               min="1"
-              placeholder="24"
               value={duration}
               onChange={(e) => setDuration(e.target.value)}
-              required
+              placeholder="7"
             />
           </div>
           <DialogFooter>
             <Button
-              type="button"
-              variant="outline"
-              onClick={onClose}
+              type="submit"
               disabled={isSubmitting}
             >
-              Cancel
-            </Button>
-            <Button type="submit" disabled={isSubmitting}>
               {isSubmitting ? 'Creating...' : 'Create Raffle'}
             </Button>
           </DialogFooter>

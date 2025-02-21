@@ -7,10 +7,10 @@ import { formatEther } from 'viem';
 import { formatDistanceToNow } from 'date-fns';
 import { Trophy, Clock, User, Coins } from 'lucide-react';
 
-export default function BetHistory({ bets, userAddress }) {
+export default function BetHistory({ bets = [], userAddress }) {
   const [filter, setFilter] = useState('all');
 
-  const filteredBets = bets.filter(bet => {
+  const filteredBets = (bets || []).filter(bet => {
     switch (filter) {
       case 'active':
         return !bet.resolved;
@@ -27,9 +27,17 @@ export default function BetHistory({ bets, userAddress }) {
 
   const sortedBets = [...filteredBets].sort((a, b) => b.createdAt - a.createdAt);
 
+  if (!bets?.length) {
+    return (
+      <div className="text-center py-6 text-muted-foreground">
+        <p>No bet history available</p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
-      <div className="flex gap-2 pb-2">
+      <div className="flex flex-wrap gap-2 pb-2">
         <Button
           variant={filter === 'all' ? 'default' : 'outline'}
           size="sm"
@@ -67,85 +75,47 @@ export default function BetHistory({ bets, userAddress }) {
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+      <div className="space-y-4">
         {sortedBets.map((bet) => (
-          <div key={bet.id} className="group relative p-0.5 rounded-lg bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500">
-            <div className="relative rounded-lg bg-background p-1">
-              <Card className="w-full border-0">
-                <CardContent className="p-4">
-                  <div className="w-full space-y-4">
-                    <div className="flex items-start justify-between">
-                      <div className="space-y-1">
-                        <h3 className="font-semibold">{bet.description}</h3>
-                        <p className="text-sm text-muted-foreground">
-                          Created {formatDistanceToNow(bet.createdAt, { addSuffix: true })}
-                        </p>
-                      </div>
-                      <div className={`px-2 py-1 rounded-full text-xs font-medium ${
-                        bet.resolved 
-                          ? 'bg-green-500/10 text-green-500' 
-                          : bet.challenger 
-                            ? 'bg-yellow-500/10 text-yellow-500'
-                            : 'bg-blue-500/10 text-blue-500'
-                      }`}>
-                        {bet.resolved 
-                          ? 'Resolved' 
-                          : bet.challenger 
-                            ? 'In Progress'
-                            : 'Open'}
-                      </div>
-                    </div>
+          <Card key={bet.id} className="overflow-hidden">
+            <CardContent className="p-4">
+              <div className="flex items-start justify-between">
+                <div className="space-y-1">
+                  <h3 className="font-semibold">{bet.description}</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Created {formatDistanceToNow(new Date(bet.createdAt * 1000), { addSuffix: true })}
+                  </p>
+                </div>
+                <div className={`px-2 py-1 rounded-full text-xs font-medium ${
+                  bet.resolved 
+                    ? 'bg-green-500/10 text-green-500' 
+                    : bet.challenger 
+                      ? 'bg-yellow-500/10 text-yellow-500'
+                      : 'bg-blue-500/10 text-blue-500'
+                }`}>
+                  {bet.resolved 
+                    ? 'Resolved' 
+                    : bet.challenger 
+                      ? 'In Progress'
+                      : 'Open'}
+                </div>
+              </div>
 
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="flex items-center gap-1">
-                          <Coins className="h-4 w-4" />
-                          Amount
-                        </span>
-                        <span className="font-medium">{formatEther(bet.amount)} ETH</span>
-                      </div>
-
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="flex items-center gap-1">
-                          <User className="h-4 w-4" />
-                          Creator
-                        </span>
-                        <span>{bet.creator === userAddress ? 'You' : 'Anonymous'}</span>
-                      </div>
-
-                      {bet.challenger && (
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="flex items-center gap-1">
-                            <User className="h-4 w-4" />
-                            Challenger
-                          </span>
-                          <span>{bet.challenger === userAddress ? 'You' : 'Anonymous'}</span>
-                        </div>
-                      )}
-
-                      {bet.resolved && (
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="flex items-center gap-1">
-                            <Trophy className="h-4 w-4" />
-                            Winner
-                          </span>
-                          <span className="text-green-500">
-                            {bet.winner === userAddress ? 'You' : 'Opponent'}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          </div>
+              <div className="mt-4 grid grid-cols-2 gap-4 text-sm">
+                <div className="flex items-center gap-2">
+                  <User className="w-4 h-4 text-muted-foreground" />
+                  <span className="truncate">
+                    {bet.creator === userAddress ? 'You' : `${bet.creator.slice(0, 6)}...${bet.creator.slice(-4)}`}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 justify-end">
+                  <Coins className="w-4 h-4 text-muted-foreground" />
+                  <span>{formatEther(bet.amount)} ETH</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         ))}
-        {sortedBets.length === 0 && (
-          <div className="col-span-full text-center py-8 text-muted-foreground">
-            No bets found
-          </div>
-        )}
       </div>
     </div>
   );

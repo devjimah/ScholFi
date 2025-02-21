@@ -5,18 +5,28 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Clock, User, Ticket, Users, Trophy } from 'lucide-react';
+import { useContract } from '@/hooks/useContract';
 
-export default function RaffleCard({ raffle, onBuyTicket, userAddress }) {
+export default function RaffleCard({ raffle, userAddress }) {
+  const { buyTicket, isBuyTicketLoading } = useContract();
+  
+  if (!raffle) return null;
+
   const isCreator = raffle.creator === userAddress;
-  const hasParticipated = raffle.participants.includes(userAddress);
-  const isActive = raffle.active;
-  const timeLeft = new Date(Number(raffle.endTime)) - new Date();
-  const isEnded = timeLeft <= 0;
+  const hasParticipated = raffle.hasParticipated;
+  const timeLeft = Number(raffle.endTime) * 1000 - Date.now();
+  const isEnded = timeLeft <= 0 || !raffle.active;
+
+  const formatAddress = (address, isUser = false) => {
+    if (!address) return 'Unknown';
+    if (isUser && address === userAddress) return 'You';
+    return `${address.slice(0, 6)}...${address.slice(-4)}`;
+  };
 
   const getStatusColor = () => {
-    if (isEnded) return 'bg-red-500';
-    if (hasParticipated) return 'bg-yellow-500';
-    return 'bg-green-500';
+    if (isEnded) return 'bg-red-500/10 text-red-500';
+    if (hasParticipated) return 'bg-yellow-500/10 text-yellow-500';
+    return 'bg-green-500/10 text-green-500';
   };
 
   const getStatusText = () => {
@@ -33,8 +43,10 @@ export default function RaffleCard({ raffle, onBuyTicket, userAddress }) {
   };
 
   const handleBuyTicket = async () => {
+    if (!raffle.id) return;
+    
     try {
-      await onBuyTicket(raffle.id);
+      await buyTicket(raffle.id, formatEther(raffle.ticketPrice));
     } catch (error) {
       console.error('Error buying ticket:', error);
     }
@@ -44,52 +56,44 @@ export default function RaffleCard({ raffle, onBuyTicket, userAddress }) {
     <Card className="w-[300px] hover:shadow-lg transition-shadow">
       <CardHeader className="pb-2">
         <div className="flex justify-between items-start">
-          <h3 className="font-semibold text-base">Raffle #{raffle.id + 1}</h3>
-          <Badge className={`${getStatusColor()} ml-2 shrink-0`}>{getStatusText()}</Badge>
+          <h3 className="font-semibold text-base">Raffle #{(raffle.id ?? 0).toString()}</h3>
+          <Badge className={getStatusColor()}>{getStatusText()}</Badge>
         </div>
       </CardHeader>
-      <CardContent className="pb-2">
+      <CardContent className="space-y-4">
         <div className="space-y-2">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <User className="h-4 w-4" />
-            <span className="truncate">
-              {isCreator ? 'You' : `${raffle.creator.slice(0, 6)}...${raffle.creator.slice(-4)}`}
-            </span>
-          </div>
-          <div className="flex items-center gap-2">
-            <Ticket className="h-4 w-4 text-primary" />
-            <span className="font-medium">{formatEther(raffle.ticketPrice)} ETH</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <Users className="h-4 w-4 text-primary" />
-            <span className="text-sm">{raffle.participants.length} participants</span>
+            <User className="w-4 h-4" />
+            <span>Creator: {formatAddress(raffle.creator, true)}</span>
           </div>
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Clock className="h-4 w-4" />
+            <Clock className="w-4 h-4" />
             <span>{formatTimeLeft()}</span>
           </div>
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Ticket className="w-4 h-4" />
+            <span>Price: {formatEther(raffle.ticketPrice)} ETH</span>
+          </div>
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Users className="w-4 h-4" />
+            <span>Total Pool: {formatEther(raffle.totalPool)} ETH</span>
+          </div>
+          {raffle.winner && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Trophy className="w-4 h-4" />
+              <span>Winner: {formatAddress(raffle.winner, true)}</span>
+            </div>
+          )}
         </div>
       </CardContent>
-      <CardFooter className="pt-2">
-        {isActive && !isEnded && !isCreator && !hasParticipated ? (
-          <Button 
-            onClick={handleBuyTicket}
-            className="w-full"
-            size="sm"
-          >
-            Buy Ticket
-          </Button>
-        ) : isEnded ? (
-          <div className="w-full flex items-center justify-center gap-2 text-sm">
-            <Trophy className="h-4 w-4 text-yellow-500" />
-            <span className="text-muted-foreground font-medium">Winner drawn!</span>
-          </div>
-        ) : hasParticipated ? (
-          <div className="w-full flex items-center justify-center gap-2 text-sm">
-            <Ticket className="h-4 w-4 text-yellow-500" />
-            <span className="text-muted-foreground font-medium">You have a ticket!</span>
-          </div>
-        ) : null}
+      <CardFooter>
+        <Button
+          className="w-full"
+          onClick={handleBuyTicket}
+          disabled={isEnded || hasParticipated || isBuyTicketLoading}
+        >
+          {isEnded ? 'Ended' : hasParticipated ? 'Already Participated' : isBuyTicketLoading ? 'Buying...' : 'Buy Ticket'}
+        </Button>
       </CardFooter>
     </Card>
   );
