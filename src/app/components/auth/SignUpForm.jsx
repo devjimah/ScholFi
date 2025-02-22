@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Icons } from '@/components/icons';
 import Link from 'next/link';
+import { ethers } from 'ethers';
 
 export default function SignUpForm() {
   const [isLoading, setIsLoading] = useState(false);
@@ -15,8 +16,8 @@ export default function SignUpForm() {
   const [formData, setFormData] = useState({
     email: '',
     password: '',
-    username: '',
-    confirmPassword: ''
+    confirmPassword: '',
+    walletAddress: ''
   });
   const [errors, setErrors] = useState({});
 
@@ -29,8 +30,10 @@ export default function SignUpForm() {
       newErrors.email = 'Email is invalid';
     }
 
-    if (!formData.username) {
-      newErrors.username = 'Username is required';
+    if (!formData.walletAddress) {
+      newErrors.walletAddress = 'Wallet address is required';
+    } else if (!ethers.isAddress(formData.walletAddress)) {
+      newErrors.walletAddress = 'Invalid wallet address';
     }
 
     if (!formData.password) {
@@ -54,7 +57,7 @@ export default function SignUpForm() {
 
     try {
       setIsLoading(true);
-      await signup(formData.email, formData.password, formData.username);
+      await signup(formData.email, formData.password, formData.walletAddress);
     } catch (error) {
       console.error('Signup error:', error);
     } finally {
@@ -68,92 +71,85 @@ export default function SignUpForm() {
       ...prev,
       [name]: value
     }));
-    // Clear error when user starts typing
-    if (errors[name]) {
-      setErrors(prev => ({
-        ...prev,
-        [name]: ''
-      }));
-    }
   };
 
   return (
-    <Card className="w-[400px]">
-      <CardHeader className="space-y-1">
-        <CardTitle className="text-2xl">Create an account</CardTitle>
+    <Card className="w-[350px]">
+      <CardHeader>
+        <CardTitle>Create an account</CardTitle>
         <CardDescription>
-          Enter your details below to create your account
+          Enter your email and password below to create your account
         </CardDescription>
       </CardHeader>
       <form onSubmit={handleSubmit}>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="username">Username</Label>
-            <Input
-              id="username"
-              name="username"
-              placeholder="johndoe"
-              type="text"
-              disabled={isLoading}
-              value={formData.username}
-              onChange={handleChange}
-            />
-            {errors.username && (
-              <p className="text-sm text-red-500">{errors.username}</p>
-            )}
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
-            <Input
-              id="email"
-              name="email"
-              placeholder="name@example.com"
-              type="email"
-              disabled={isLoading}
-              value={formData.email}
-              onChange={handleChange}
-            />
-            {errors.email && (
-              <p className="text-sm text-red-500">{errors.email}</p>
-            )}
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="password">Password</Label>
-            <Input
-              id="password"
-              name="password"
-              type="password"
-              disabled={isLoading}
-              value={formData.password}
-              onChange={handleChange}
-            />
-            {errors.password && (
-              <p className="text-sm text-red-500">{errors.password}</p>
-            )}
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="confirmPassword">Confirm Password</Label>
-            <Input
-              id="confirmPassword"
-              name="confirmPassword"
-              type="password"
-              disabled={isLoading}
-              value={formData.confirmPassword}
-              onChange={handleChange}
-            />
-            {errors.confirmPassword && (
-              <p className="text-sm text-red-500">{errors.confirmPassword}</p>
-            )}
+        <CardContent>
+          <div className="grid w-full items-center gap-4">
+            <div className="flex flex-col space-y-1.5">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                name="email"
+                placeholder="name@example.com"
+                type="email"
+                autoComplete="email"
+                value={formData.email}
+                onChange={handleChange}
+              />
+              {errors.email && <span className="text-sm text-red-500">{errors.email}</span>}
+            </div>
+            <div className="flex flex-col space-y-1.5">
+              <Label htmlFor="walletAddress">Wallet Address</Label>
+              <Input
+                id="walletAddress"
+                name="walletAddress"
+                placeholder="0x..."
+                type="text"
+                value={formData.walletAddress}
+                onChange={handleChange}
+              />
+              {errors.walletAddress && <span className="text-sm text-red-500">{errors.walletAddress}</span>}
+            </div>
+            <div className="flex flex-col space-y-1.5">
+              <Label htmlFor="password">Password</Label>
+              <Input
+                id="password"
+                name="password"
+                type="password"
+                autoComplete="new-password"
+                value={formData.password}
+                onChange={handleChange}
+              />
+              {errors.password && <span className="text-sm text-red-500">{errors.password}</span>}
+            </div>
+            <div className="flex flex-col space-y-1.5">
+              <Label htmlFor="confirmPassword">Confirm Password</Label>
+              <Input
+                id="confirmPassword"
+                name="confirmPassword"
+                type="password"
+                autoComplete="new-password"
+                value={formData.confirmPassword}
+                onChange={handleChange}
+              />
+              {errors.confirmPassword && <span className="text-sm text-red-500">{errors.confirmPassword}</span>}
+            </div>
           </div>
         </CardContent>
         <CardFooter className="flex flex-col space-y-4">
-          <Button className="w-full" type="submit" disabled={isLoading}>
+          <Button 
+            className="w-full" 
+            type="submit"
+            disabled={isLoading}
+          >
             {isLoading && <Icons.spinner className="mr-2 h-4 w-4 animate-spin" />}
             Sign Up
           </Button>
-          <p className="text-sm text-muted-foreground text-center">
+          <p className="px-8 text-center text-sm text-muted-foreground">
             Already have an account?{' '}
-            <Link href="/login" className="text-primary hover:underline">
+            <Link
+              href="/login"
+              className="underline underline-offset-4 hover:text-primary"
+            >
               Login
             </Link>
           </p>

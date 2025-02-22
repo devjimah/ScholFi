@@ -4,6 +4,7 @@ import { createContext, useContext, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { notify } from '@/app/components/ui/NotificationSystem';
 import Cookies from 'js-cookie';
+import { api } from '@/services/api';
 
 const AuthContext = createContext({});
 
@@ -49,65 +50,73 @@ export function AuthProvider({ children }) {
     return null;
   }
 
+  const login = async (email, password) => {
+    try {
+      const { token, walletAddress } = await api.login({ email, password });
+      
+      // Store auth data
+      Cookies.set('auth', token);
+      const userData = { email, walletAddress };
+      localStorage.setItem('user', JSON.stringify(userData));
+      setUser(userData);
+      
+      notify({
+        title: 'Success',
+        message: 'Successfully logged in!',
+        type: 'success'
+      });
+      
+      router.push('/bets');
+    } catch (error) {
+      notify({
+        title: 'Error',
+        message: error.message || 'Failed to login',
+        type: 'error'
+      });
+      throw error;
+    }
+  };
+
+  const signup = async (email, password, walletAddress) => {
+    try {
+      const { token } = await api.signup({ email, password, walletAddress });
+      
+      // Store auth data
+      Cookies.set('auth', token);
+      const userData = { email, walletAddress };
+      localStorage.setItem('user', JSON.stringify(userData));
+      setUser(userData);
+      
+      notify({
+        title: 'Success',
+        message: 'Account created successfully!',
+        type: 'success'
+      });
+      
+      router.push('/bets');
+    } catch (error) {
+      notify({
+        title: 'Error',
+        message: error.message || 'Failed to create account',
+        type: 'error'
+      });
+      throw error;
+    }
+  };
+
+  const logout = () => {
+    Cookies.remove('auth');
+    localStorage.removeItem('user');
+    setUser(null);
+    router.push('/login');
+  };
+
   const value = {
     user,
     loading,
-    signup: async (email, password, username) => {
-      try {
-        const existingUsers = JSON.parse(localStorage.getItem('users') || '[]');
-        
-        if (existingUsers.some(u => u.email === email)) {
-          throw new Error('Email already exists');
-        }
-
-        const newUser = {
-          id: Date.now(),
-          email,
-          username,
-          password,
-          createdAt: new Date().toISOString()
-        };
-
-        existingUsers.push(newUser);
-        localStorage.setItem('users', JSON.stringify(existingUsers));
-        localStorage.setItem('user', JSON.stringify(newUser));
-        setUser(newUser);
-        Cookies.set('auth', 'true', { expires: 7 });
-
-        notify('success', 'Account created successfully!');
-        router.push('/bets');
-      } catch (error) {
-        notify('error', error.message);
-        throw error;
-      }
-    },
-    login: async (email, password) => {
-      try {
-        const users = JSON.parse(localStorage.getItem('users') || '[]');
-        const user = users.find(u => u.email === email && u.password === password);
-
-        if (!user) {
-          throw new Error('Invalid credentials');
-        }
-
-        setUser(user);
-        localStorage.setItem('user', JSON.stringify(user));
-        Cookies.set('auth', 'true', { expires: 7 });
-
-        notify('success', 'Logged in successfully!');
-        router.push('/bets');
-      } catch (error) {
-        notify('error', error.message);
-        throw error;
-      }
-    },
-    logout: () => {
-      setUser(null);
-      localStorage.removeItem('user');
-      Cookies.remove('auth');
-      notify('success', 'Logged out successfully');
-      router.push('/');
-    }
+    login,
+    signup,
+    logout
   };
 
   return (

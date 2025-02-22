@@ -1,31 +1,19 @@
 'use client';
 
 import { ConnectButton } from '@rainbow-me/rainbowkit';
-import { Button } from '@/components/ui/button';
-import { Wallet, ChevronDown, LogOut } from 'lucide-react';
 import { useDisconnect } from 'wagmi';
-import { useAuth } from '@/contexts/AuthContext';
+import { Button } from '@/components/ui/button';
 import { useRouter } from 'next/navigation';
-import { 
-  DropdownMenu, 
-  DropdownMenuContent, 
-  DropdownMenuItem, 
-  DropdownMenuTrigger 
-} from '@/components/ui/dropdown-menu';
+import Cookies from 'js-cookie';
 
 export default function CustomConnectButton() {
   const { disconnect } = useDisconnect();
-  const { logout } = useAuth();
   const router = useRouter();
 
   const handleDisconnect = async () => {
-    try {
-      await disconnect();
-      logout();
-      router.push('/');
-    } catch (error) {
-      console.error('Error disconnecting:', error);
-    }
+    disconnect();
+    Cookies.remove('wallet.connected');
+    router.replace('/');
   };
 
   return (
@@ -36,72 +24,69 @@ export default function CustomConnectButton() {
         openAccountModal,
         openChainModal,
         openConnectModal,
-        authenticationStatus,
         mounted,
       }) => {
-        const ready = mounted && authenticationStatus !== 'loading';
-        const connected = ready && account && chain;
+        const ready = mounted;
+        if (!ready) {
+          return null;
+        }
+
+        if (!mounted) {
+          return null;
+        }
+
+        if (!account) {
+          return (
+            <Button onClick={openConnectModal} type="button">
+              Connect Wallet
+            </Button>
+          );
+        }
+
+        if (chain.unsupported) {
+          return (
+            <Button onClick={openChainModal} type="button" variant="destructive">
+              Wrong network
+            </Button>
+          );
+        }
 
         return (
-          <div
-            {...(!ready && {
-              'aria-hidden': true,
-              style: {
-                opacity: 0,
-                pointerEvents: 'none',
-                userSelect: 'none',
-              },
-            })}
-          >
-            {(() => {
-              if (!connected) {
-                return (
-                  <Button onClick={openConnectModal} size="sm" className="gap-2">
-                    <Wallet className="h-4 w-4" />
-                    Connect Wallet
-                  </Button>
-                );
-              }
+          <div className="flex gap-3">
+            <Button
+              onClick={openChainModal}
+              variant="outline"
+              className="flex items-center gap-2"
+            >
+              {chain.hasIcon && (
+                <div className="w-4 h-4">
+                  {chain.iconUrl && (
+                    <img
+                      alt={chain.name ?? 'Chain icon'}
+                      src={chain.iconUrl}
+                      className="w-4 h-4"
+                    />
+                  )}
+                </div>
+              )}
+              {chain.name}
+            </Button>
 
-              if (chain.unsupported) {
-                return (
-                  <Button onClick={openChainModal} variant="destructive" size="sm">
-                    Wrong network
-                  </Button>
-                );
-              }
+            <Button
+              onClick={openAccountModal}
+              variant="outline"
+              className="flex items-center gap-2"
+            >
+              {account.displayName}
+              {account.displayBalance ? ` (${account.displayBalance})` : ''}
+            </Button>
 
-              return (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="gap-2"
-                    >
-                      <Wallet className="h-4 w-4" />
-                      {account.displayName}
-                      <ChevronDown className="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={openAccountModal}>
-                      Account Details
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={openChainModal}>
-                      Switch Network
-                    </DropdownMenuItem>
-                    <DropdownMenuItem 
-                      onClick={handleDisconnect}
-                      className="text-red-600 focus:text-red-600"
-                    >
-                      <LogOut className="h-4 w-4 mr-2" />
-                      Disconnect
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              );
-            })()}
+            <Button
+              onClick={handleDisconnect}
+              variant="destructive"
+            >
+              Disconnect
+            </Button>
           </div>
         );
       }}

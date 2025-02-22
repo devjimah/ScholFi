@@ -22,7 +22,13 @@ export default function UserHistory({ bets, polls, raffles, stakes, userAddress 
   const getActivityStatus = (item, type) => {
     switch (type) {
       case 'bet':
-        return item.resolved ? 'Resolved' : item.challenger ? 'In Progress' : 'Open';
+        switch (item.state) {
+          case 0: return 'Pending';
+          case 1: return 'Accepted';
+          case 2: return 'Resolved';
+          case 3: return 'Cancelled';
+          default: return 'Unknown';
+        }
       case 'poll':
         return item.ended ? 'Ended' : 'Active';
       case 'raffle':
@@ -42,9 +48,13 @@ export default function UserHistory({ bets, polls, raffles, stakes, userAddress 
         return 'bg-green-500/10 text-green-500';
       case 'In Progress':
       case 'Active':
+      case 'Accepted':
         return 'bg-yellow-500/10 text-yellow-500';
       case 'Open':
+      case 'Pending':
         return 'bg-blue-500/10 text-blue-500';
+      case 'Cancelled':
+        return 'bg-red-500/10 text-red-500';
       default:
         return 'bg-gray-500/10 text-gray-500';
     }
@@ -60,8 +70,25 @@ export default function UserHistory({ bets, polls, raffles, stakes, userAddress 
     if (!timestamp) return 'Unknown time';
     
     const now = Math.floor(Date.now() / 1000);
-    const diff = now - Number(timestamp);
+    let timestampInSeconds;
     
+    // Ensure timestamp is a number and convert to seconds if needed
+    if (typeof timestamp === 'string') {
+      // If it's a very long number (milliseconds) or ISO string
+      const parsed = Date.parse(timestamp) || Number(timestamp);
+      timestampInSeconds = Math.floor(parsed / 1000);
+    } else {
+      timestampInSeconds = Math.floor(Number(timestamp));
+    }
+    
+    // Validate timestamp
+    if (isNaN(timestampInSeconds) || timestampInSeconds <= 0) {
+      return 'Unknown time';
+    }
+    
+    const diff = now - timestampInSeconds;
+    
+    if (diff < 0) return 'Just now'; // Handle future dates or clock skew
     if (diff < 60) return 'Just now';
     if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
     if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
@@ -75,7 +102,23 @@ export default function UserHistory({ bets, polls, raffles, stakes, userAddress 
     ...(polls?.map(poll => ({ ...poll, type: 'poll' })) || []),
     ...(raffles?.map(raffle => ({ ...raffle, type: 'raffle' })) || []),
     ...(stakes?.map(stake => ({ ...stake, type: 'stake' })) || []),
-  ].sort((a, b) => b.createdAt - a.createdAt);
+  ]
+  // Filter activities for the current user
+  .filter(item => {
+    switch (item.type) {
+      case 'bet':
+        return item.creator === userAddress || item.challenger === userAddress;
+      case 'poll':
+        return item.creator === userAddress || item.voters?.includes(userAddress);
+      case 'raffle':
+        return item.creator === userAddress || item.participants?.includes(userAddress);
+      case 'stake':
+        return item.staker === userAddress;
+      default:
+        return false;
+    }
+  })
+  .sort((a, b) => b.createdAt - a.createdAt);
 
   const filteredActivities = filter === 'all' 
     ? allActivities 

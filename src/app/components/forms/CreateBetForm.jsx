@@ -8,14 +8,14 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useAccount } from 'wagmi'
 import { useRouter } from 'next/navigation'
-import { useMockContract } from '../hooks/useMockContract'
+import { useContract } from '../hooks/useContract'
 import { notify } from '../ui/NotificationSystem'
 import { Loader2 } from 'lucide-react'
 
 export default function CreateBetForm() {
   const { isConnected } = useAccount()
   const router = useRouter()
-  const { createBet, isCreating, createSuccess, createError } = useMockContract()
+  const { createBet, isCreating, createSuccess, createError } = useContract()
   const [formData, setFormData] = useState({
     type: 'bet',
     description: '',

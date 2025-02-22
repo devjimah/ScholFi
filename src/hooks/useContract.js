@@ -6,17 +6,43 @@ import { parseEther, keccak256, stringToHex, toHex } from 'viem';
 import { UNIGAME_ABI } from '@/config/abi';
 import { UNIGAME_CONTRACT_ADDRESS } from '@/config/addresses';
 import { notify } from '@/app/components/ui/NotificationSystem';
+import { useTransactionConfirm } from '@/hooks/useTransactionConfirm';
 
 export function useContract() {
   const { address, account } = useAccount();
   const { data: walletClient } = useWalletClient();
   const publicClient = usePublicClient();
+  const { confirmTransaction } = useTransactionConfirm();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [bets, setBets] = useState([]);
   const [stakes, setStakes] = useState([]);
   const [polls, setPolls] = useState([]);
   const [raffles, setRaffles] = useState([]);
+
+  // Helper function to wait for transaction and handle confirmation
+  const waitForTransaction = async (hash, actionName) => {
+    try {
+      const receipt = await publicClient.waitForTransactionReceipt({ hash });
+      if (receipt.status === 'success' || receipt.status === 1) {
+        notify({
+          title: 'Success',
+          description: `${actionName} was successful!`,
+          type: 'success',
+        });
+        confirmTransaction(); // Trigger page refresh
+        return true;
+      }
+      throw new Error(`${actionName} failed`);
+    } catch (error) {
+      notify({
+        title: 'Error',
+        description: `${actionName} failed: ${error.message}`,
+        type: 'error',
+      });
+      return false;
+    }
+  };
 
   const fetchBets = useCallback(async () => {
     if (!publicClient) return;
@@ -243,42 +269,6 @@ export function useContract() {
     }
   }, [publicClient, walletClient]);
 
-  const waitForTransaction = async (hash, operation) => {
-    try {
-      notify({
-        title: 'Transaction Pending',
-        description: `${operation} transaction is being processed...`,
-        type: 'info',
-      });
-
-      const receipt = await publicClient.waitForTransactionReceipt({ hash });
-      
-      // Check transaction status
-      if (receipt.status === 'success') {
-        notify({
-          title: 'Transaction Confirmed',
-          description: `${operation} was successful!`,
-          type: 'success',
-        });
-        return true;
-      } else {
-        notify({
-          title: 'Transaction Failed',
-          description: `${operation} failed. Please check your wallet for details.`,
-          type: 'error',
-        });
-        return false;
-      }
-    } catch (error) {
-      notify({
-        title: 'Transaction Error',
-        description: error.message || `${operation} transaction failed`,
-        type: 'error',
-      });
-      return false;
-    }
-  };
-
   const createBet = async ({ description, amount }) => {
     if (!walletClient) throw new Error('Wallet not connected');
     if (!description || !amount) throw new Error('Missing required fields');
@@ -497,6 +487,203 @@ export function useContract() {
     }
   }, [walletClient, publicClient, fetchPolls]);
 
+  // Bet Participation
+  const acceptBet = async (betId, amount) => {
+    if (!walletClient) throw new Error('Wallet not connected');
+    if (!betId || !amount) throw new Error('Missing required fields');
+    if (amount <= 0) throw new Error('Amount must be greater than 0');
+    
+    try {
+      const { hash } = await walletClient.writeContract({
+        address: UNIGAME_CONTRACT_ADDRESS,
+        abi: UNIGAME_ABI,
+        functionName: 'acceptBet',
+        args: [betId],
+        value: parseEther(amount.toString()),
+      });
+
+      const success = await waitForTransaction(hash, 'Accept Bet');
+      if (success) {
+        await fetchBets();
+      }
+    } catch (error) {
+      console.error('Error accepting bet:', error);
+      notify({
+        title: 'Error',
+        description: error.message || 'Failed to accept bet',
+        type: 'error',
+      });
+      throw error;
+    }
+  };
+
+  // Poll Participation
+  const submitVote = async (pollId, optionIndex) => {
+    if (!walletClient) throw new Error('Wallet not connected');
+    if (pollId === undefined || optionIndex === undefined) throw new Error('Missing required fields');
+    
+    try {
+      const { hash } = await walletClient.writeContract({
+        address: UNIGAME_CONTRACT_ADDRESS,
+        abi: UNIGAME_ABI,
+        functionName: 'vote',
+        args: [pollId, optionIndex],
+      });
+
+      const success = await waitForTransaction(hash, 'Submit Vote');
+      if (success) {
+        await fetchPolls();
+      }
+    } catch (error) {
+      console.error('Error submitting vote:', error);
+      notify({
+        title: 'Error',
+        description: error.message || 'Failed to submit vote',
+        type: 'error',
+      });
+      throw error;
+    }
+  };
+
+  // Raffle Participation
+  const buyRaffleTickets = async (raffleId, ticketCount) => {
+    if (!walletClient) throw new Error('Wallet not connected');
+    if (!raffleId || !ticketCount) throw new Error('Missing required fields');
+    if (ticketCount <= 0) throw new Error('Must buy at least one ticket');
+
+    try {
+      const raffle = await publicClient.readContract({
+        address: UNIGAME_CONTRACT_ADDRESS,
+        abi: UNIGAME_ABI,
+        functionName: 'raffles',
+        args: [raffleId],
+      });
+
+      const totalCost = raffle.ticketPrice * BigInt(ticketCount);
+
+      const { hash } = await walletClient.writeContract({
+        address: UNIGAME_CONTRACT_ADDRESS,
+        abi: UNIGAME_ABI,
+        functionName: 'buyTicket',
+        args: [raffleId, ticketCount],
+        value: totalCost,
+      });
+
+      const success = await waitForTransaction(hash, 'Buy Raffle Tickets');
+      if (success) {
+        await fetchRaffles();
+      }
+    } catch (error) {
+      console.error('Error buying raffle tickets:', error);
+      notify({
+        title: 'Error',
+        description: error.message || 'Failed to buy raffle tickets',
+        type: 'error',
+      });
+      throw error;
+    }
+  };
+
+  // Stake Participation
+  const stakeInPool = async (poolId, amount) => {
+    if (!walletClient) throw new Error('Wallet not connected');
+    if (!poolId || !amount) throw new Error('Missing required fields');
+    if (amount <= 0) throw new Error('Amount must be greater than 0');
+
+    try {
+      const { hash } = await walletClient.writeContract({
+        address: UNIGAME_CONTRACT_ADDRESS,
+        abi: UNIGAME_ABI,
+        functionName: 'stake',
+        args: [poolId],
+        value: parseEther(amount.toString()),
+      });
+
+      const success = await waitForTransaction(hash, 'Stake');
+      if (success) {
+        await fetchStakes();
+      }
+    } catch (error) {
+      console.error('Error staking:', error);
+      notify({
+        title: 'Error',
+        description: error.message || 'Failed to stake',
+        type: 'error',
+      });
+      throw error;
+    }
+  };
+
+  const unstakeFromPool = async (poolId) => {
+    if (!walletClient) throw new Error('Wallet not connected');
+    if (!poolId) throw new Error('Missing pool ID');
+
+    try {
+      const { hash } = await walletClient.writeContract({
+        address: UNIGAME_CONTRACT_ADDRESS,
+        abi: UNIGAME_ABI,
+        functionName: 'unstake',
+        args: [poolId],
+      });
+
+      const success = await waitForTransaction(hash, 'Unstake');
+      if (success) {
+        await fetchStakes();
+      }
+    } catch (error) {
+      console.error('Error unstaking:', error);
+      notify({
+        title: 'Error',
+        description: error.message || 'Failed to unstake',
+        type: 'error',
+      });
+      throw error;
+    }
+  };
+
+  // Additional helper functions
+  const checkUserVoted = async (pollId, address) => {
+    try {
+      return await publicClient.readContract({
+        address: UNIGAME_CONTRACT_ADDRESS,
+        abi: UNIGAME_ABI,
+        functionName: 'hasVoted',
+        args: [pollId, address],
+      });
+    } catch (error) {
+      console.error('Error checking vote status:', error);
+      return false;
+    }
+  };
+
+  const getUserStakeInfo = async (poolId, address) => {
+    try {
+      return await publicClient.readContract({
+        address: UNIGAME_CONTRACT_ADDRESS,
+        abi: UNIGAME_ABI,
+        functionName: 'userStakes',
+        args: [poolId, address],
+      });
+    } catch (error) {
+      console.error('Error fetching stake info:', error);
+      return null;
+    }
+  };
+
+  const getRaffleTickets = async (raffleId, address) => {
+    try {
+      return await publicClient.readContract({
+        address: UNIGAME_CONTRACT_ADDRESS,
+        abi: UNIGAME_ABI,
+        functionName: 'ticketsBought',
+        args: [raffleId, address],
+      });
+    } catch (error) {
+      console.error('Error fetching raffle tickets:', error);
+      return 0;
+    }
+  };
+
   useEffect(() => {
     if (publicClient) {
       fetchBets();
@@ -516,6 +703,7 @@ export function useContract() {
     createBet,
     createPoll,
     createRaffle,
+    createStake,
     vote,
     stake,
     unstake,
@@ -523,5 +711,13 @@ export function useContract() {
     fetchPolls,
     fetchRaffles,
     fetchStakes,
+    acceptBet,
+    submitVote,
+    buyRaffleTickets,
+    stakeInPool,
+    unstakeFromPool,
+    checkUserVoted,
+    getUserStakeInfo,
+    getRaffleTickets,
   };
 }
