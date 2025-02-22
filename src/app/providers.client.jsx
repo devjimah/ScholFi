@@ -11,6 +11,7 @@ import {
   connectorsForWallets,
 } from '@rainbow-me/rainbowkit';
 import { WalletProvider } from '@/contexts/WalletContext';
+import { AuthProvider } from '@/contexts/AuthContext.jsx';
 import '@rainbow-me/rainbowkit/styles.css';
 
 const projectId = process.env.NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID;
@@ -58,9 +59,11 @@ export default function Providers({ children }) {
     <WagmiConfig config={wagmiConfig}>
       <QueryClientProvider client={queryClient}>
         <RainbowKitProvider chains={chains}>
-          <WalletProvider>
-            {children}
-          </WalletProvider>
+          <AuthProvider>
+            <WalletProvider>
+              {children}
+            </WalletProvider>
+          </AuthProvider>
         </RainbowKitProvider>
       </QueryClientProvider>
     </WagmiConfig>

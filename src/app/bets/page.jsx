@@ -1,9 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { useAccount, useDisconnect } from 'wagmi';
+import { useAccount } from 'wagmi';
 import { useContract } from '@/hooks/useContract';
+import { useAuth } from '@/contexts/AuthContext';
 import { notify } from '@/app/components/ui/NotificationSystem';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -26,21 +26,20 @@ import ProjectStats from '@/app/components/stats/ProjectStats';
 import ActiveItems from '@/app/components/active/ActiveItems';
 
 export default function BetsPage() {
-  const router = useRouter();
   const { address, isConnected } = useAccount();
-  const { disconnect } = useDisconnect();
+  const { user, loading: authLoading } = useAuth();
+  const [mounted, setMounted] = useState(false);
   const [showCreateBetModal, setShowCreateBetModal] = useState(false);
   const [showCreatePollModal, setShowCreatePollModal] = useState(false);
   const [showCreateRaffleModal, setShowCreateRaffleModal] = useState(false);
   const [showCreateStakeModal, setShowCreateStakeModal] = useState(false);
-  const [mounted, setMounted] = useState(false);
 
   const { 
     bets,
     polls,
     raffles,
     stakes,
-    loading: isLoading, 
+    loading: contractLoading, 
     error,
     createBet,
     createPoll,
@@ -52,13 +51,7 @@ export default function BetsPage() {
     setMounted(true);
   }, []);
 
-  useEffect(() => {
-    if (!isConnected && mounted) {
-      router.push('/');
-    }
-  }, [isConnected, router, mounted]);
-
-  if (!mounted || isLoading) {
+  if (!mounted || contractLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <Loader2 className="w-8 h-8 animate-spin" />
@@ -67,13 +60,27 @@ export default function BetsPage() {
   }
 
   if (error) {
+    notify('error', error.message);
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen">
-        <div className="text-red-500 mb-4">Error: {error}</div>
-        <Button onClick={() => router.refresh()}>
-          <RefreshCw className="w-4 h-4 mr-2" />
-          Retry
-        </Button>
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <p className="text-red-500 mb-4">Error loading data</p>
+          <Button onClick={() => window.location.reload()}>
+            <RefreshCw className="mr-2 h-4 w-4" />
+            Retry
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user || !isConnected) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <p className="text-red-500 mb-4">You must be connected to view this page.</p>
+          <CustomConnectButton />
+        </div>
       </div>
     );
   }
@@ -105,10 +112,7 @@ export default function BetsPage() {
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-        <Button variant="outline" onClick={() => disconnect()}>
-          <LogOut className="w-4 h-4 mr-2" />
-          Disconnect
-        </Button>
+       
       </div>
 
       {/* Project Stats */}

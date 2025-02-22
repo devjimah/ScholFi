@@ -42,8 +42,8 @@ export default function NotificationSystem() {
       }, ttl)
     }
 
-    window.addEventListener('scholfi:notification', handleNewNotification)
-    return () => window.removeEventListener('scholfi:notification', handleNewNotification)
+    window.addEventListener('schoolfi:notification', handleNewNotification)
+    return () => window.removeEventListener('schoolfi:notification', handleNewNotification)
   }, [])
 
   const removeNotification = (id) => {

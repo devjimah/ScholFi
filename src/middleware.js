@@ -1,28 +1,40 @@
 import { NextResponse } from 'next/server';
 
+// Protected routes that require wallet connection and auth
+const protectedRoutes = ['/bets', '/polls', '/raffles', '/stakes'];
+
+// Auth routes that should redirect to /bets if already authenticated
+const authRoutes = ['/login', '/signup'];
+
+// Public routes that don't need any protection
+const publicRoutes = ['/', '/api', '/_next', '/favicon.ico'];
+
 export function middleware(request) {
-  // Get auth cookie
-  const authCookie = request.cookies.get('auth')?.value;
-  const isAuthPage = request.nextUrl.pathname.startsWith('/login') || 
-                    request.nextUrl.pathname.startsWith('/signup');
-  const isHomePage = request.nextUrl.pathname === '/';
+  // Get the current path
+  const { pathname } = request.nextUrl;
 
-  // If user is authenticated and on homepage, redirect to bets
-  if (authCookie && isHomePage) {
-    const betsUrl = new URL('/bets', request.url);
-    return NextResponse.redirect(betsUrl);
+  // Skip middleware for public routes and static files
+  if (publicRoutes.some(route => pathname.startsWith(route))) {
+    return NextResponse.next();
   }
 
-  // If the page is not an auth page and user is not authenticated, redirect to login
-  if (!authCookie && !isAuthPage && !isHomePage) {
-    const loginUrl = new URL('/login', request.url);
-    return NextResponse.redirect(loginUrl);
+  // Get auth status from cookies
+  const isAuthenticated = request.cookies.get('auth')?.value === 'true';
+  const isWalletConnected = request.cookies.get('wallet.connected')?.value === 'true';
+
+  // Handle auth routes (login/signup)
+  if (authRoutes.some(route => pathname.startsWith(route))) {
+    if (isAuthenticated && isWalletConnected) {
+      return NextResponse.redirect(new URL('/bets', request.url));
+    }
+    return NextResponse.next();
   }
 
-  // If user is authenticated and trying to access auth pages, redirect to bets
-  if (authCookie && isAuthPage) {
-    const betsUrl = new URL('/bets', request.url);
-    return NextResponse.redirect(betsUrl);
+  // Handle protected routes
+  if (protectedRoutes.some(route => pathname.startsWith(route))) {
+    if (!isAuthenticated || !isWalletConnected) {
+      return NextResponse.redirect(new URL('/', request.url));
+    }
   }
 
   return NextResponse.next();
@@ -30,10 +42,12 @@ export function middleware(request) {
 
 export const config = {
   matcher: [
-    '/',
-    '/bets/:path*',
-    '/profile/:path*',
-    '/login',
-    '/signup'
-  ]
+    /*
+     * Match all request paths except for the ones starting with:
+     * - _next/static (static files)
+     * - _next/image (image optimization files)
+     * - favicon.ico (favicon file)
+     */
+    '/((?!_next/static|_next/image|favicon.ico).*)',
+  ],
 };

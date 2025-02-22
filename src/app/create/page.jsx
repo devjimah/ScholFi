@@ -10,13 +10,13 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { notify } from '../components/ui/NotificationSystem';
-import { useMockContract } from '../components/hooks/useMockContract';
+import { useContract } from '../components/hooks/useContract';
 import { Loader2 } from 'lucide-react';
 
 export default function CreatePage() {
   const router = useRouter();
   const { address, isConnected } = useAccount();
-  const contract = useMockContract();
+  const contract = useContract();
   const [isLoading, setIsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('bet');
 

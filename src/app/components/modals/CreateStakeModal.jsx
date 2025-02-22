@@ -5,7 +5,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { parseEther } from 'viem';
 import { useContract } from '@/hooks/useContract';
 
 export default function CreateStakeModal({ open, onClose }) {
@@ -20,16 +19,11 @@ export default function CreateStakeModal({ open, onClose }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      // Convert values to appropriate formats
-      const maxStake = parseEther(formData.maxStake);
-      const apy = BigInt(Math.floor(parseFloat(formData.apy) * 100)); // Convert to basis points (e.g., 5% -> 500)
-      const duration = BigInt(Math.floor(parseFloat(formData.duration) * 24 * 60 * 60)); // Convert days to seconds
-
       await createStake({
         name: formData.name,
-        maxStake,
-        apy,
-        duration,
+        maxStake: formData.maxStake,
+        apy: parseFloat(formData.apy),
+        duration: parseFloat(formData.duration),
       });
       
       onClose();
@@ -100,7 +94,7 @@ export default function CreateStakeModal({ open, onClose }) {
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="duration">Duration (days)</Label>
+            <Label htmlFor="duration">Duration (Days)</Label>
             <Input
               id="duration"
               name="duration"

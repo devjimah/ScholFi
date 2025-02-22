@@ -1,16 +1,16 @@
 import { Inter } from 'next/font/google';
-import Providers from './providers';
+import Providers from './providers.client';
 import { Toaster } from 'sonner';
 import './globals.css';
 
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata = {
-  title: 'ScholFi',
-  description: 'Decentralized Betting Platform for Students',
+  title: 'SchoolFi',
+  description: 'Decentralized Betting Platform',
 };
 
-export default function RootLayout({ children }) {
+function RootLayout({ children }) {
   return (
     <html lang="en">
       <body className={inter.className}>
@@ -22,3 +22,5 @@ export default function RootLayout({ children }) {
     </html>
   );
 }
+
+export default RootLayout;
