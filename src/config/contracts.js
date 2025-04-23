@@ -1,4 +1,4 @@
-export const UNIGAME_CONTRACT_ADDRESS = "0x5FbDB2315678afecb367f032d93F642f64180aa3"; // Local hardhat node address
+export const UNIGAME_CONTRACT_ADDRESS = "0x3667b92dC6dc7934feb034C3261CdE398202B1bb"; // Arbitrum Sepolia address
 
 export const SUPPORTED_CHAINS = {
   ARBITRUM_SEPOLIA: {
@@ -19,18 +19,6 @@ export const SUPPORTED_CHAINS = {
       }
     },
     testnet: true
-  },
-  HARDHAT: {
-    id: 31337,
-    name: 'Hardhat',
-    rpcUrls: {
-      default: {
-        http: ['http://127.0.0.1:8545']
-      },
-      public: {
-        http: ['http://127.0.0.1:8545']
-      }
-    },
-    testnet: true
   }
 };
+

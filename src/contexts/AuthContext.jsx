@@ -1,10 +1,11 @@
-'use client';
+"use client";
 
-import { createContext, useContext, useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { notify } from '@/app/components/ui/NotificationSystem';
-import Cookies from 'js-cookie';
-import { api } from '@/services/api';
+import { createContext, useContext, useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { useAccount } from "wagmi";
+import { notify } from "@/app/components/ui/NotificationSystem";
+import Cookies from "js-cookie";
+import { api } from "@/services/api";
 
 const AuthContext = createContext({});
 
@@ -13,33 +14,52 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
   const [mounted, setMounted] = useState(false);
   const router = useRouter();
+  const { isConnected } = useAccount();
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
+  // Define logout function early so it can be used in effects
+  const logout = () => {
+    Cookies.remove("auth");
+    localStorage.removeItem("user");
+    setUser(null);
+    router.push("/");
+  };
+
+  // Listen for wallet disconnection
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    
+    if (!mounted) return;
+
+    // If wallet is disconnected and user is logged in, log them out
+    if (!isConnected && user) {
+      logout();
+    }
+  }, [isConnected, user, mounted, logout, router]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
     try {
       // Check if user is logged in on mount
-      const storedUser = localStorage.getItem('user');
-      const authCookie = Cookies.get('auth');
-      
+      const storedUser = localStorage.getItem("user");
+      const authCookie = Cookies.get("auth");
+
       if (storedUser && authCookie) {
         const parsedUser = JSON.parse(storedUser);
         setUser(parsedUser);
       } else {
         // Clear any inconsistent state
-        localStorage.removeItem('user');
-        Cookies.remove('auth');
+        localStorage.removeItem("user");
+        Cookies.remove("auth");
         setUser(null);
       }
     } catch (error) {
-      console.error('Error initializing auth:', error);
+      console.error("Error initializing auth:", error);
       // Clear any inconsistent state
-      localStorage.removeItem('user');
-      Cookies.remove('auth');
+      localStorage.removeItem("user");
+      Cookies.remove("auth");
       setUser(null);
     }
     setLoading(false);
@@ -53,25 +73,25 @@ export function AuthProvider({ children }) {
   const login = async (email, password) => {
     try {
       const { token, walletAddress } = await api.login({ email, password });
-      
+
       // Store auth data
-      Cookies.set('auth', token);
+      Cookies.set("auth", token);
       const userData = { email, walletAddress };
-      localStorage.setItem('user', JSON.stringify(userData));
+      localStorage.setItem("user", JSON.stringify(userData));
       setUser(userData);
-      
+
       notify({
-        title: 'Success',
-        message: 'Successfully logged in!',
-        type: 'success'
+        title: "Success",
+        message: "Successfully logged in!",
+        type: "success",
       });
-      
-      router.push('/bets');
+
+      router.push("/bets");
     } catch (error) {
       notify({
-        title: 'Error',
-        message: error.message || 'Failed to login',
-        type: 'error'
+        title: "Error",
+        message: error.message || "Failed to login",
+        type: "error",
       });
       throw error;
     }
@@ -80,56 +100,47 @@ export function AuthProvider({ children }) {
   const signup = async (email, password, walletAddress) => {
     try {
       const { token } = await api.signup({ email, password, walletAddress });
-      
+
       // Store auth data
-      Cookies.set('auth', token);
+      Cookies.set("auth", token);
       const userData = { email, walletAddress };
-      localStorage.setItem('user', JSON.stringify(userData));
+      localStorage.setItem("user", JSON.stringify(userData));
       setUser(userData);
-      
+
       notify({
-        title: 'Success',
-        message: 'Account created successfully!',
-        type: 'success'
+        title: "Success",
+        message: "Account created successfully!",
+        type: "success",
       });
-      
-      router.push('/bets');
+
+      router.push("/bets");
     } catch (error) {
       notify({
-        title: 'Error',
-        message: error.message || 'Failed to create account',
-        type: 'error'
+        title: "Error",
+        message: error.message || "Failed to create account",
+        type: "error",
       });
       throw error;
     }
   };
 
-  const logout = () => {
-    Cookies.remove('auth');
-    localStorage.removeItem('user');
-    setUser(null);
-    router.push('/login');
-  };
+  // logout function is defined above
 
   const value = {
     user,
     loading,
     login,
     signup,
-    logout
+    logout,
   };
 
-  return (
-    <AuthContext.Provider value={value}>
-      {children}
-    </AuthContext.Provider>
-  );
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    throw new Error("useAuth must be used within an AuthProvider");
   }
   return context;
 };
