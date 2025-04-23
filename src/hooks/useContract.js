@@ -27,6 +27,13 @@ export function useContract() {
   const [polls, setPolls] = useState([]);
   const [raffles, setRaffles] = useState([]);
 
+  // Loading states for participation functions
+  const [isAcceptBetLoading, setIsAcceptBetLoading] = useState(false);
+  const [isBuyTicketLoading, setIsBuyTicketLoading] = useState(false);
+  const [isVoteLoading, setIsVoteLoading] = useState(false);
+  const [isStakeLoading, setIsStakeLoading] = useState(false);
+  const [isUnstakeLoading, setIsUnstakeLoading] = useState(false);
+
   // Helper function to wait for transaction and handle confirmation
   const waitForTransaction = async (hash, actionName) => {
     try {
@@ -247,14 +254,14 @@ export function useContract() {
             let hasParticipated = false;
             if (walletClient?.account) {
               try {
-                // Using ticketsBought mapping directly
+                // Using getTicketCount function to check if user has tickets
                 const ticketCount = await publicClient.readContract({
                   address: UNIGAME_CONTRACT_ADDRESS,
                   abi: UNIGAME_ABI,
-                  functionName: "raffles",
-                  args: [i],
+                  functionName: "getTicketCount",
+                  args: [i, walletClient.account.address],
                 });
-                hasParticipated = ticketCount[3] > 0; // totalPool > 0 means tickets were bought
+                hasParticipated = ticketCount > 0;
               } catch (error) {
                 console.error("Error checking participation:", error);
               }
@@ -495,6 +502,7 @@ export function useContract() {
         throw new Error("Wallet not connected");
       }
 
+      setIsVoteLoading(true);
       try {
         const { request } = await publicClient.simulateContract({
           address: UNIGAME_CONTRACT_ADDRESS,
@@ -509,9 +517,17 @@ export function useContract() {
         if (success) {
           await fetchPolls();
         }
+        return success;
       } catch (error) {
         console.error("Vote error:", error);
+        notify({
+          title: "Error",
+          description: error.message || "Failed to vote",
+          type: "error",
+        });
         throw error;
+      } finally {
+        setIsVoteLoading(false);
       }
     },
     [walletClient, publicClient, fetchPolls]
@@ -523,6 +539,7 @@ export function useContract() {
     if (!betId || !amount) throw new Error("Missing required fields");
     if (amount <= 0) throw new Error("Amount must be greater than 0");
 
+    setIsAcceptBetLoading(true);
     try {
       const { hash } = await walletClient.writeContract({
         address: UNIGAME_CONTRACT_ADDRESS,
@@ -536,6 +553,7 @@ export function useContract() {
       if (success) {
         await fetchBets();
       }
+      return success;
     } catch (error) {
       console.error("Error accepting bet:", error);
       notify({
@@ -544,6 +562,8 @@ export function useContract() {
         type: "error",
       });
       throw error;
+    } finally {
+      setIsAcceptBetLoading(false);
     }
   };
 
@@ -577,11 +597,13 @@ export function useContract() {
   };
 
   // Raffle Participation
-  const buyRaffleTickets = async (raffleId, ticketCount) => {
+  const buyTicket = async (raffleId, ticketCount) => {
     if (!walletClient) throw new Error("Wallet not connected");
-    if (!raffleId || !ticketCount) throw new Error("Missing required fields");
-    if (ticketCount <= 0) throw new Error("Must buy at least one ticket");
+    if (raffleId === undefined) throw new Error("Missing raffle ID");
+    if (!ticketCount || ticketCount <= 0)
+      throw new Error("Must buy at least one ticket");
 
+    setIsBuyTicketLoading(true);
     try {
       const raffle = await publicClient.readContract({
         address: UNIGAME_CONTRACT_ADDRESS,
@@ -590,7 +612,7 @@ export function useContract() {
         args: [raffleId],
       });
 
-      const totalCost = raffle.ticketPrice * BigInt(ticketCount);
+      const totalCost = raffle[1] * BigInt(ticketCount); // ticketPrice is at index 1
 
       const { hash } = await walletClient.writeContract({
         address: UNIGAME_CONTRACT_ADDRESS,
@@ -604,6 +626,7 @@ export function useContract() {
       if (success) {
         await fetchRaffles();
       }
+      return success;
     } catch (error) {
       console.error("Error buying raffle tickets:", error);
       notify({
@@ -612,8 +635,13 @@ export function useContract() {
         type: "error",
       });
       throw error;
+    } finally {
+      setIsBuyTicketLoading(false);
     }
   };
+
+  // Keep the old function for backward compatibility
+  const buyRaffleTickets = buyTicket;
 
   // Stake Participation
   const stakeInPool = async (poolId, amount) => {
@@ -621,6 +649,7 @@ export function useContract() {
     if (!poolId || !amount) throw new Error("Missing required fields");
     if (amount <= 0) throw new Error("Amount must be greater than 0");
 
+    setIsStakeLoading(true);
     try {
       const { hash } = await walletClient.writeContract({
         address: UNIGAME_CONTRACT_ADDRESS,
@@ -634,6 +663,7 @@ export function useContract() {
       if (success) {
         await fetchStakes();
       }
+      return success;
     } catch (error) {
       console.error("Error staking:", error);
       notify({
@@ -642,6 +672,8 @@ export function useContract() {
         type: "error",
       });
       throw error;
+    } finally {
+      setIsStakeLoading(false);
     }
   };
 
@@ -649,6 +681,7 @@ export function useContract() {
     if (!walletClient) throw new Error("Wallet not connected");
     if (!poolId) throw new Error("Missing pool ID");
 
+    setIsUnstakeLoading(true);
     try {
       const { hash } = await walletClient.writeContract({
         address: UNIGAME_CONTRACT_ADDRESS,
@@ -661,6 +694,7 @@ export function useContract() {
       if (success) {
         await fetchStakes();
       }
+      return success;
     } catch (error) {
       console.error("Error unstaking:", error);
       notify({
@@ -669,6 +703,8 @@ export function useContract() {
         type: "error",
       });
       throw error;
+    } finally {
+      setIsUnstakeLoading(false);
     }
   };
 
@@ -731,22 +767,34 @@ export function useContract() {
     stakes,
     error,
     loading,
+    // Loading states
+    isAcceptBetLoading,
+    isBuyTicketLoading,
+    isVoteLoading,
+    isStakeLoading,
+    isUnstakeLoading,
+    // Creation functions
     createBet,
     createPoll,
     createRaffle,
     createStake,
+    // Core functions
     vote,
     stake,
     unstake,
+    // Fetch functions
     fetchBets,
     fetchPolls,
     fetchRaffles,
     fetchStakes,
+    // Participation functions
     acceptBet,
     submitVote,
+    buyTicket,
     buyRaffleTickets,
     stakeInPool,
     unstakeFromPool,
+    // Helper functions
     checkUserVoted,
     getUserStakeInfo,
     getRaffleTickets,
